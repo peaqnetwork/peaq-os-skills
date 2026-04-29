@@ -1,0 +1,149 @@
+# peaqOS Skill
+
+A framework-agnostic agent skill that onboards machine operators to [peaqOS](https://peaq.xyz) — peaq's financial OS for autonomous machines. It guides you through the full setup using the `peaqos` CLI: giving your machine a permanent on-chain identity (peaqID), an ownership NFT, and a Machine Credit Rating (MCR) built from verified event history.
+
+Works on both **agung testnet** (free, no real money) and **mainnet**. Ships with a Claude Code adapter out of the box — porting to other agent frameworks requires only a thin adapter file.
+
+---
+
+## What it does
+
+Invoke `/peaqos` in Claude Code and the skill will:
+
+- **Demo mode** — walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
+- **Real onboarding** — ask five questions about your machine and deployment, recommend the right architecture (self-managed or proxy-managed), then execute the CLI commands to register, mint, and verify
+- **Fleet management** — check MCR scores, list all machines for an operator, find machines with low or no rating, submit heartbeat events
+- **Troubleshooting** — diagnose common failures (funding, activation errors, MCR lag, key mismatches) and walk you through the fix
+
+Adapts its language to your background: concise and direct for developers, plain English with narrated steps for hobbyists and first-timers.
+
+---
+
+## Requirements
+
+- **Python ≥ 3.10**
+- **`peaq-os-cli`** installed (see below)
+- A wallet private key (the skill can generate one for you if needed)
+- For mainnet: PEAQ tokens to cover gas (the gas station handles this automatically)
+- For testnet: nothing — the skill walks you through the agung faucet
+
+---
+
+## Install the CLI
+
+```bash
+python3 -m venv .peaqos-env
+source .peaqos-env/bin/activate
+pip install peaq-os-cli
+peaqos --version
+```
+
+---
+
+## Install the skill
+
+**Claude Code**
+
+Claude Code discovers skills by scanning `~/.claude/skills/`. Point it at the adapter:
+
+```bash
+# Option A — symlink (picks up changes automatically)
+ln -s /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
+
+# Option B — copy
+cp -r /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
+```
+
+Then invoke it from any Claude Code session:
+
+```
+/peaqos
+```
+
+**Other agent frameworks**
+
+Load `AGENT-PROMPT.md` as the agent's system prompt or instructions. Make the `knowledge/` files and `GUIDE.md` accessible to the agent (as tool-readable files or injected context). Implement the interactive questioning steps using your framework's input primitives. No other changes are needed — all logic lives in `AGENT-PROMPT.md` and the knowledge files.
+
+---
+
+## Quick command reference
+
+These are the underlying `peaqos` commands the skill drives. You can also run them directly.
+
+| Goal | Command |
+|------|---------|
+| Set up environment | `peaqos init` |
+| Check wallet & config | `peaqos whoami` |
+| Create an OWS wallet | `peaqos wallet create <name>` |
+| Set OWS wallet as active | `peaqos wallet use <name>` |
+| List OWS wallets | `peaqos wallet list` |
+| Onboard a machine (testnet) | `peaqos activate --skip-funding` |
+| Onboard a machine (mainnet) | `peaqos activate` |
+| Onboard on behalf of a machine | `peaqos activate --for 0x<addr> --machine-key ./machine.key` |
+| Submit an activity event | `peaqos qualify event --machine-id <n> --type activity --value 0 --ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)"` |
+| Submit a revenue event | `peaqos qualify event --machine-id <n> --type revenue --value <cents> --ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)"` |
+| Check MCR score | `peaqos qualify mcr did:peaq:0x<address>` |
+| Inspect machine profile | `peaqos show machine did:peaq:0x<address>` |
+| List fleet | `peaqos show operator machines did:peaq:0x<operator>` |
+
+---
+
+## Skill structure
+
+```
+peaqos-skill/
+├── AGENT-PROMPT.md               # Framework-agnostic orchestration (8-phase logic, routing, security)
+├── manifest.json                 # Metadata, capability requirements, adapter list
+├── GUIDE.md                      # Portable operator manual — full CLI recipes
+├── knowledge/
+│   ├── decision-tree.md          # Architecture questionnaire & recommendation matrix
+│   ├── concepts.md               # peaqID, MCR, trust levels, bond, visibility
+│   ├── cli-reference.md          # Every command, flag, env var, exit code
+│   └── troubleshooting.md        # Symptom → cause → fix
+├── adapters/
+│   └── claude-code/
+│       └── SKILL.md              # Claude Code adapter (thin wrapper over AGENT-PROMPT.md)
+└── examples/
+    └── .env.example              # Annotated env template for both networks
+```
+
+`AGENT-PROMPT.md` is the source of truth for all agent behaviour. Adapters are thin wrappers that wire it into a specific framework. The knowledge files are read at runtime and never duplicated.
+
+---
+
+## Networks
+
+| | agung testnet | mainnet |
+|-|---------------|---------|
+| Chain ID | 9990 | 3338 |
+| Faucet | [get-test-tokens](https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens) | n/a |
+| Gas station | Not available — use faucet + `--skip-funding` | `https://depinstation.peaq.xyz` |
+| Explorer | [testnet.peaqscan.xyz](https://testnet.peaqscan.xyz/) | [peaqscan.xyz](https://peaqscan.xyz/) |
+| Contract addresses | See `examples/.env.example` | Fetched automatically by `peaqos init` |
+
+---
+
+## Security
+
+- **Never paste your private key in chat.** The skill will refuse to accept it and redirect you to set `PEAQOS_PRIVATE_KEY` in your `.env` file.
+- The skill never stores, echoes, or logs key values.
+- `--machine-key` reads from a file (not a CLI flag) to keep keys out of shell history and `ps` output.
+
+---
+
+## Troubleshooting
+
+See `knowledge/troubleshooting.md` for a full symptom → cause → fix reference. Common issues:
+
+- **`peaqos` not found** → activate your venv: `source .peaqos-env/bin/activate`
+- **Balance insufficient on testnet** → use the agung faucet, then re-run with `--skip-funding`
+- **MCR shows `Provisioned` after activation** → indexer lag; wait 30–90s and poll `peaqos qualify mcr <did>` again
+- **Step 4 fails: `Proxy operator is not registered`** → run `peaqos activate` in self mode first, then retry proxy mode
+
+---
+
+## Learn more
+
+- [peaq documentation](https://docs.peaq.xyz)
+- [peaqOS](https://peaq.xyz)
+- [peaqscan block explorer](https://peaqscan.xyz/)

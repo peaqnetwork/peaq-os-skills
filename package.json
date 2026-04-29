@@ -1,0 +1,29 @@
+{
+  "name": "@peaqos/skills",
+  "version": "0.1.0",
+  "description": "Agent skills for peaqOS — onboard machines, manage fleets, and build Machine Credit Ratings across Claude Code, Cursor, and Windsurf.",
+  "keywords": [
+    "peaq", "peaqos", "peaqid", "mcr", "depin", "machine-economy",
+    "agent-skill", "claude-code", "cursor", "windsurf", "ai-agent"
+  ],
+  "homepage": "https://peaq.xyz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/peaqnetwork/peaq-os-skills.git"
+  },
+  "license": "Apache-2.0",
+  "bin": {
+    "peaqos-skills": "./bin/skills.js"
+  },
+  "scripts": {
+    "test": "node bin/skills.js --help"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
