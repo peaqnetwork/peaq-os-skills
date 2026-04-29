@@ -54,7 +54,23 @@ skills/
 ```
 
 ---
+## Development
 
+To test locally after cloning, no npm install is needed — just run the install script directly with `node`:
+```
+git clone https://github.com/peaqnetwork/peaq-os-skills
+cd peaq-os-skills
+
+# See available skills
+node bin/skills.js list
+
+# Install a skill to your local agent
+node bin/skills.js add peaqos --agent claude-code
+```
+Then open a Claude Code session in a clean working directory and invoke `/peaqos`.
+To add a new skill, create a folder under `skills/` following the structure in `skills/peaqos/`. At minimum you need `AGENT-PROMPT.md`, `manifest.json`, and an adapter for each supported agent under `adapters/`.
+
+---
 ## Learn more
 
 For further information on peaqOS see the [docs](https://docs.peaq.xyz/home).
