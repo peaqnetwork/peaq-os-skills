@@ -7,13 +7,9 @@ description: |
   check an MCR score, manage a DePIN fleet, or onboard to peaqOS. Handles both agung testnet and
   mainnet. Adapts tone to developers and non-technical operators alike. Invoke on any mention of
   peaqOS, peaqID, MCR, machine registration, DePIN onboarding, or the peaqos CLI.
-allowed-tools:
-  - Bash
-  - Read
-  - Glob
-  - Grep
-  - AskUserQuestion
-  - WebFetch
+allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
+license: Apache-2.0
+compatibility: Requires Python 3.10+ and peaq-os-cli
 ---
 
 # peaqOS — Claude Code Adapter

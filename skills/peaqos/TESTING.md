@@ -8,6 +8,18 @@ Pre-release QA checklist for the `/peaqos` Claude Code skill. Run through all sc
 
 **1. Install the CLI from source**
 
+The CLI has a Cairo dependency (via `svglib`). Install the system libraries first or `pip install` will fail:
+
+```bash
+# macOS
+brew install cairo pkg-config
+
+# Ubuntu / Debian
+sudo apt-get install -y libcairo2-dev pkg-config
+```
+
+Then install the CLI:
+
 ```bash
 git clone https://github.com/peaqnetwork/peaq-os-cli-py
 cd peaq-os-cli-py
