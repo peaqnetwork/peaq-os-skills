@@ -350,7 +350,11 @@ Output: tabular list of `peaqID`, `Machine ID`, `MCR score`, `Rating`.
 
 ## `peaqos scale`
 
-Machine Market orchestration commands. All `scale` subcommands require `PEAQOS_ORCHESTRATION_URL` and `PEAQOS_ORCH_API_KEY` to be set.
+Machine Market orchestration commands. All `scale` subcommands require `PEAQOS_ORCHESTRATION_URL`. `PEAQOS_ORCH_API_KEY` is optional — only needed if the deployment requires platform API key auth.
+
+> **SDK note:** If using the Python SDK directly (`PeaqosClient`), the equivalent env var is `PEAQOS_API_KEY` (not `PEAQOS_ORCH_API_KEY`). Both hold the same platform API key value — the names differ between the CLI and the SDK.
+
+> **Auth modes:** Scale commands use two auth mechanisms. Platform commands (machine CRUD, list, status, order list) use the platform API key (`PEAQOS_ORCH_API_KEY`) if configured. Agent commands (search, order create/execute, order received, order dispute) authenticate with the pairing token via `x-agent-pairing-token` and always require `--pairing-token-file`.
 
 ### `peaqos scale machine onboard`
 
@@ -373,7 +377,7 @@ peaqos scale machine onboard \
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--identity-ref` | No | DID or `peaqos:machine:<id>` |
+| `--identity-ref` | Yes | DID (`did:peaq:0x...`) or `peaqos:machine:<id>` |
 | `--display-name` | Yes | Human-readable machine name |
 | `--owner-id` | Yes | Operator/owner identifier |
 | `--machine-type` | Yes | e.g. `edge-node`, `robot`, `sensor` |
@@ -554,13 +558,12 @@ peaqos scale order status <order-id> --json
 
 ### `peaqos scale order list`
 
-List market orders for a machine.
+List market orders for a machine. Uses platform auth — no pairing token needed.
 
 ```bash
-peaqos scale order list \
-  --machine-id <id> \
-  --pairing-token-file ./pairing.token
-peaqos scale order list --machine-id <id> --pairing-token-file ./pairing.token --json
+peaqos scale order list --machine-id <id>
+peaqos scale order list --machine-id <id> --json
+peaqos scale order list --machine-id <id> --limit 10 --cursor <cursor>
 ```
 
 ---
@@ -601,7 +604,7 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_GAS_STATION_URL` | No | Gas station URL (not needed with `--skip-funding`) |
 | `PEAQOS_MCR_API_URL` | No | Override MCR API URL |
 | `PEAQOS_ORCHESTRATION_URL` | Yes (Scale commands) | Base URL of the Machine Markets API |
-| `PEAQOS_ORCH_API_KEY` | Yes (Scale commands) | Platform API key for orchestration |
+| `PEAQOS_ORCH_API_KEY` | No (Scale commands) | Platform API key for orchestration — optional, only required if deployment enforces API key auth |
 | `IDENTITY_REGISTRY_ADDRESS` | Yes | IdentityRegistry contract |
 | `IDENTITY_STAKING_ADDRESS` | Yes | IdentityStaking contract |
 | `EVENT_REGISTRY_ADDRESS` | Yes | EventRegistry contract |

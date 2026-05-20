@@ -7,16 +7,10 @@ A growing library of agent skills for [peaqOS](https://peaq.xyz) — on-chain id
 ## Install
 
 ```bash
-npx @peaqos/skills add <skill>
+npx skills add peaqnetwork/peaq-os-skills
 ```
 
-Auto-detects your installed agent (Claude Code, Cursor, Windsurf). To specify:
-
-```bash
-npx @peaqos/skills add <skill> --agent claude-code
-npx @peaqos/skills add <skill> --agent cursor
-npx @peaqos/skills add <skill> --agent windsurf
-```
+Auto-detects your installed agent (Claude Code, Cursor, Windsurf) and installs to the correct skills directory.
 
 ---
 

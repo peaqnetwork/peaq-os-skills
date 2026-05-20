@@ -341,7 +341,14 @@ Execute the shell command and show output. Offer to pipe through `--json` for sc
 
 ## Phase 9 — Scale / Machine Market
 
+> **Note:** The Scale / Machine Market API is currently **experimental**. Commands, flags, and error codes may change without notice as the platform evolves. Inform the user of this if they are building production workflows against it.
+
 Read `knowledge/cli-reference.md` for the full `peaqos scale` command reference throughout this phase.
+
+**Machine ID types — important distinction:**
+- `peaqos activate` produces an **on-chain machine ID** — a positive integer (e.g. `42`). Used by `qualify event --machine-id`.
+- `peaqos scale machine onboard` produces a **Market machine ID** — a string like `mach_abc123`. Used by all `peaqos scale` commands.
+These are different identifiers. Do not mix them up when collecting values from the user.
 
 **Prerequisite check — fire when user selects E, not at startup**
 
@@ -350,16 +357,13 @@ Before proceeding, verify Scale is configured:
 ```
 peaqos whoami 2>/dev/null | head -3 || echo "NOT_CONFIGURED"
 echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
-echo "${PEAQOS_ORCH_API_KEY:-MISSING}"
 ```
 
 - `NOT_CONFIGURED` → user needs to complete on-chain onboarding first (Phases 2–7). Offer to start there.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
   > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set in your `.env` or shell environment. This is the base URL of the Machine Markets API — your platform admin or the peaqOS team can provide this."
   Do not proceed until set.
-- `PEAQOS_ORCH_API_KEY` missing → tell user:
-  > "`PEAQOS_ORCH_API_KEY` is required for Scale commands. Set it in your `.env` file (see `examples/.env.example`)."
-  Do not proceed until set.
+- `PEAQOS_ORCH_API_KEY` — **optional**. Some deployments require it; others do not. If the user has one, they should set it in `.env`. If they get an `AUTH_REQUIRED` error when running Scale commands, that is the signal to set it.
 
 Once both pass, ask the user: "What would you like to do in the Machine Market?" Wait for their response. Options:
 - S1: Register a machine in the Market
@@ -392,8 +396,10 @@ Collect from the user (ask interactively, one at a time):
 
 For signing the identity challenge, offer in order:
 1. **Key file** (recommended): `--identity-key-file ./controller.key`
-2. **OWS wallet** (if `OWS_AVAILABLE=true`): automatic via active OWS wallet — no extra flag needed
-3. **Manual paste**: prompt will appear — paste the EIP-191 signature
+2. **OWS wallet** (if `PEAQOS_OWS_WALLET` is set in `.env`): signs automatically via the active vault wallet — no extra flag needed
+3. **Manual paste**: the CLI will display the challenge message and prompt for an EIP-191 signature
+
+> ⚠️ **Important:** The standard `PEAQOS_PRIVATE_KEY` in `.env` does **not** auto-sign the identity challenge. If neither `--identity-key-file` nor an OWS wallet is configured, the CLI will always fall through to the manual paste prompt. Make sure the user knows to have the challenge signing method ready before running the command.
 
 ```
 peaqos scale machine onboard \
@@ -406,7 +412,7 @@ peaqos scale machine onboard \
   --identity-key-file ./controller.key
 ```
 
-Capture `machine_id` from stdout. Store it — it's needed for agent pairing and orders.
+Capture `machine_id` from stdout — it will look like `mach_abc123`. Store it — this is the **Market machine ID** needed for agent pairing and all subsequent `peaqos scale` commands. It is not the same as the on-chain integer machine ID from `peaqos activate`.
 
 On success, print:
 ```
@@ -480,6 +486,8 @@ Collect:
 - `--region` (optional): preferred region
 - `--budget-amount` / `--budget-max` / `--budget-currency` (optional)
 - `--max-results` (optional): default returns all matches
+- `--native-only` (optional): restrict to services with native execution (no external handoff)
+- `--allow-handoff` (optional): explicitly allow external handoff services
 
 ```
 peaqos scale search \
@@ -494,7 +502,7 @@ peaqos scale search \
 Show the results table. Capture `search_id` and the preferred `quote_id` (top-ranked by default).
 
 If no quotes returned:
-> "No matching services found. Try removing `--native-only` if set, increasing your budget, or broadening the service type."
+> "No matching services found. Try: removing `--native-only` if set, adding `--allow-handoff` to include external handoff services, increasing your budget, or broadening the service type."
 
 **Step 3 — Place the order**
 
@@ -519,8 +527,8 @@ Capture `order_id` from output.
 **Step 4 — Confirm or dispute**
 
 Once the order executes, ask the user:
-- Happy with the result? → `peaqos scale order received` (confirms delivery, releases payment)
-- Problem with the result? → `peaqos scale order dispute` (freezes payment for review)
+- Happy with the result? → confirm delivery with `peaqos scale order received <order-id> --pairing-token-file ./pairing.token`
+- Problem with the result? → raise a dispute with `peaqos scale order dispute <order-id> --reason "<reason>" --pairing-token-file ./pairing.token`
 
 Print a summary on completion:
 ```
@@ -538,9 +546,21 @@ Order completed ✓
 Ask what the user needs:
 
 - **Check a specific order**: `peaqos scale order status <order-id>`
-- **List all orders for a machine**: `peaqos scale order list --machine-id <id> --pairing-token-file ./pairing.token`
-- **Check machine status**: `peaqos scale machine status <machine-id>`
+  Uses platform auth. No pairing token needed.
+
+- **List all orders for a machine**: `peaqos scale order list --machine-id <market-machine-id>`
+  Uses platform auth. No pairing token needed. Add `--json` for full output. Pass `--limit` and `--cursor` for pagination.
+
+- **Confirm delivery**: `peaqos scale order received <order-id> --pairing-token-file ./pairing.token`
+  Uses agent pairing auth. Requires the pairing token file.
+
+- **Raise a dispute**: `peaqos scale order dispute <order-id> --reason "<reason>" --pairing-token-file ./pairing.token`
+  Uses agent pairing auth. `--reason` is required. Optionally pass `--evidence ./evidence.json`.
+
+- **Check machine status**: `peaqos scale machine status <market-machine-id>`
 - **List machines**: `peaqos scale machine list`
+
+Note: `<market-machine-id>` is the `mach_*` string from `peaqos scale machine onboard` or `peaqos scale machine list` — not the on-chain integer from `peaqos activate`.
 
 Show output and offer to pipe through `--json` for scriptable results.
 

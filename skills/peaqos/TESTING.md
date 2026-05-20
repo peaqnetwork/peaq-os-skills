@@ -206,14 +206,14 @@ Run through at least two distinct machine profiles and check the recommendation 
 
 **Prerequisites:**
 - Complete S2 first (machine must have an on-chain identity and funded wallet)
-- `PEAQOS_ORCHESTRATION_URL` and `PEAQOS_ORCH_API_KEY` set in `.env`
+- `PEAQOS_ORCHESTRATION_URL` set in `.env` (required); `PEAQOS_ORCH_API_KEY` set if the deployment requires it (optional)
 - An agent address and provider identifier to use for pairing
 - A known service type available in the Market environment being tested against
 
 **Steps:**
 1. `/peaqos`
 2. Select **E: Connect a machine to the Machine Market (Scale)**
-3. Confirm the prerequisite check passes (orchestration URL and API key detected)
+3. Confirm the prerequisite check passes (orchestration URL detected; API key check is skipped as it is optional)
 4. Select **S1: Register a machine in the Market**
 5. Provide identity ref (DID from S2), display name, owner ID, machine type, runtime profile
 6. Sign the identity challenge (use `--identity-key-file` or OWS if available)

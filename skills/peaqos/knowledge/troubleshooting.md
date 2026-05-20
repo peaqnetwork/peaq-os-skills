@@ -193,9 +193,9 @@ Check `peaqos.log` to see which steps completed.
 **Cause:** `PEAQOS_ORCHESTRATION_URL` env var is missing from `.env` or shell.
 **Fix:** Add `PEAQOS_ORCHESTRATION_URL=<url>` to your `.env` file. The URL is provided by your platform admin or the peaqOS team.
 
-**Symptom:** Exit 3 — `PEAQOS_ORCH_API_KEY is not configured` / `AUTH_REQUIRED`
-**Cause:** `PEAQOS_ORCH_API_KEY` env var is missing or invalid.
-**Fix:** Add `PEAQOS_ORCH_API_KEY=<key>` to your `.env` file. Obtain the key from your platform admin.
+**Symptom:** `AUTH_REQUIRED` error on any Scale command
+**Cause:** The Market deployment you are connecting to requires a platform API key, but `PEAQOS_ORCH_API_KEY` is not set.
+**Fix:** Add `PEAQOS_ORCH_API_KEY=<key>` to your `.env` file. Obtain the key from your platform admin or the peaqOS team. Note: many deployments do not require this key — only set it if you see this error.
 
 ---
 
