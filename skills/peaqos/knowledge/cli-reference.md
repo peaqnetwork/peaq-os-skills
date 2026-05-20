@@ -348,6 +348,245 @@ Output: tabular list of `peaqID`, `Machine ID`, `MCR score`, `Rating`.
 
 ---
 
+## `peaqos scale`
+
+Machine Market orchestration commands. All `scale` subcommands require `PEAQOS_ORCHESTRATION_URL` and `PEAQOS_ORCH_API_KEY` to be set.
+
+### `peaqos scale machine onboard`
+
+Register a machine in the Machine Market. Distinct from `peaqos activate` — on-chain identity must exist first.
+
+```bash
+peaqos scale machine onboard \
+  --identity-ref did:peaq:0x<40-hex> \
+  --display-name "Solar Inverter #4821" \
+  --owner-id <owner-id> \
+  --machine-type edge-node \
+  --runtime-profile linux-docker \
+  --capabilities inference,data-feed \
+  --skill-keys oracle.price-feed \
+  --labels env=production,region=eu \
+  --identity-key-file ./controller.key
+```
+
+**Flags:**
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--identity-ref` | No | DID or `peaqos:machine:<id>` |
+| `--display-name` | Yes | Human-readable machine name |
+| `--owner-id` | Yes | Operator/owner identifier |
+| `--machine-type` | Yes | e.g. `edge-node`, `robot`, `sensor` |
+| `--runtime-profile` | Yes | e.g. `linux-docker` |
+| `--capabilities` | No | Comma-separated capability list |
+| `--skill-keys` | No | Skill keys the machine supports |
+| `--labels` | No | `key=value` pairs, comma-separated |
+| `--identity-key-file` | No | DID controller private key for signing |
+| `--identity-signature-file` | No | Pre-signed EIP-191 signature file (mutually exclusive with `--identity-key-file`) |
+| `--skip-activate` | No | Register in draft status without activating |
+| `--yes` / `-y` | No | Skip confirmation prompt |
+| `--json` | No | Machine-readable output (requires non-interactive signing) |
+
+**Signing modes (checked in order):**
+1. `--identity-signature-file` — pre-signed signature from file
+2. `--identity-key-file` — sign with provided private key
+3. OWS wallet active — sign via active OWS wallet automatically
+4. Manual fallback — CLI prompts to paste EIP-191 signature
+
+**Exit codes:** 0 success · 1 validation error · 2 API/proof error · 3 config error (missing `PEAQOS_ORCHESTRATION_URL`)
+
+---
+
+### `peaqos scale machine status`
+
+Check a machine's status in the Market.
+
+```bash
+peaqos scale machine status <machine-id>
+peaqos scale machine status <machine-id> --json
+```
+
+---
+
+### `peaqos scale machine list`
+
+List machines registered in the Market.
+
+```bash
+peaqos scale machine list
+peaqos scale machine list --json
+```
+
+---
+
+### `peaqos scale agent pair`
+
+Pair an AI agent to a machine via the challenge-sign flow. Produces a **one-time pairing token** — store it securely immediately.
+
+```bash
+peaqos scale agent pair \
+  --machine-id <id> \
+  --agent-address 0x<address> \
+  --agent-provider teneo \
+  --agent-role machine-market-buyer \
+  --agent-did did:pkh:eip155:1:0x<address> \
+  --per-tx-limit 10.00 \
+  --daily-limit 100.00 \
+  --currency USD \
+  --allowed-skills oracle.price-feed \
+  --agent-signature-file ./agent.sig
+```
+
+**Flags:**
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--machine-id` | Yes | Machine to pair to |
+| `--agent-address` | Yes | Agent's on-chain address |
+| `--agent-provider` | Yes | Provider identifier (e.g. `teneo`) |
+| `--agent-role` | Yes | e.g. `machine-market-buyer` |
+| `--agent-did` | No | Agent DID |
+| `--agent-signature-file` | No | Pre-signed challenge signature (required for `--json` mode) |
+| `--description` | No | Human-readable pairing description |
+| `--per-tx-limit` | No | Max spend per transaction |
+| `--daily-limit` | No | Max daily spend |
+| `--currency` | No | Budget currency (e.g. `USD`) |
+| `--allowed-skills` | No | Comma-separated allowed skill keys |
+| `--denied-skills` | No | Comma-separated denied skill keys |
+| `--allowed-service-ids` | No | Comma-separated allowed service IDs |
+| `--denied-service-ids` | No | Comma-separated denied service IDs |
+| `--yes` / `-y` | No | Skip confirmation |
+| `--json` | No | Machine-readable output |
+
+**Exit codes:** 0 success · 1 validation error · 2 API/proof error · 3 config error
+
+---
+
+### `peaqos scale search`
+
+Search the Machine Market for services matching a task.
+
+```bash
+peaqos scale search \
+  --machine-id <id> \
+  --service-type oracle.price-feed \
+  --pairing-token-file ./pairing.token \
+  --operation get-latest-price \
+  --capabilities realtime,verified \
+  --region eu-west \
+  --budget-amount 5.00 \
+  --budget-max 10.00 \
+  --budget-currency USD \
+  --max-results 5
+```
+
+**Flags:**
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--machine-id` | Yes | Machine performing the search |
+| `--service-type` | Yes | Service type (e.g. `oracle.price-feed`) |
+| `--pairing-token-file` | Yes | Path to agent pairing token file |
+| `--agent-pairing-id` | No | Agent pairing ID |
+| `--operation` | No | Desired operation (e.g. `get-latest-price`) |
+| `--capabilities` | No | Required capabilities, comma-separated |
+| `--region` | No | Preferred region |
+| `--max-results` | No | Max quotes to return |
+| `--budget-amount` | No | Budget amount |
+| `--budget-max` | No | Maximum budget amount |
+| `--budget-currency` | No | Budget currency (e.g. `USD`) |
+| `--native-only` | No | Require native execution (no external handoff) |
+| `--allow-handoff` | No | Allow external handoff |
+| `--provider-credentials` | No | Path to JSON file with provider credentials |
+| `--json` | No | Machine-readable output |
+
+Returns a ranked table of quotes. Output includes `search_id` and per-quote `quote_id`, `service_id`, `operation`, `score`, `execution_mode`.
+
+**Exit codes:** 0 success · 1 validation error · 2 API error · 3 config error (missing URL)
+
+---
+
+### `peaqos scale order <service-id>`
+
+Place a market order for a service. `<service-id>` is the UUID from a search result.
+
+```bash
+peaqos scale order <service-id> \
+  --machine-id <id> \
+  --agent-pairing-id <pairing-id> \
+  --pairing-token-file ./pairing.token \
+  --search-id <search-id> \
+  --quote-id <quote-id> \
+  --operation get-latest-price \
+  --input ./input.json \
+  --budget-amount 5.00 \
+  --budget-currency USD
+```
+
+**Payment flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `--payment-tx-hash` | Pre-completed payment tx hash |
+| `--payment-chain` | Chain for payment proof (required with `--payment-tx-hash`) |
+| `--payment-token` | Token for payment proof (required with `--payment-tx-hash`) |
+| `--skip-payment` | Skip payment step (requires `--payment-tx-hash`) |
+
+**Payment flows:**
+- **No payment required**: 2-step create → execute
+- **Wallet payment (EVM)**: 5-step create → intent → send → proof/escrow → execute. OWS wallets handle EVM transfers automatically.
+- **Pre-completed**: pass `--payment-tx-hash` + `--payment-chain` + `--payment-token` with `--skip-payment`
+
+**Exit codes:** 0 success · 1 validation error · 2 API/payment error · 3 config error
+
+---
+
+### `peaqos scale order status`
+
+Check the status of a market order.
+
+```bash
+peaqos scale order status <order-id>
+peaqos scale order status <order-id> --json
+```
+
+---
+
+### `peaqos scale order list`
+
+List market orders for a machine.
+
+```bash
+peaqos scale order list \
+  --machine-id <id> \
+  --pairing-token-file ./pairing.token
+peaqos scale order list --machine-id <id> --pairing-token-file ./pairing.token --json
+```
+
+---
+
+### `peaqos scale order received`
+
+Confirm delivery of a market order. Releases held payment to the provider.
+
+```bash
+peaqos scale order received <order-id> --pairing-token-file ./pairing.token
+```
+
+---
+
+### `peaqos scale order dispute`
+
+Dispute a market order. Freezes payment pending resolution.
+
+```bash
+peaqos scale order dispute <order-id> \
+  --reason "Service output did not match expected schema" \
+  --pairing-token-file ./pairing.token
+```
+
+---
+
 ## Environment variables
 
 All commands read from `.env` in the working directory (loaded automatically) or from shell env vars.
@@ -361,6 +600,8 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_RPC_URL` | No | Override RPC endpoint |
 | `PEAQOS_GAS_STATION_URL` | No | Gas station URL (not needed with `--skip-funding`) |
 | `PEAQOS_MCR_API_URL` | No | Override MCR API URL |
+| `PEAQOS_ORCHESTRATION_URL` | Yes (Scale commands) | Base URL of the Machine Markets API |
+| `PEAQOS_ORCH_API_KEY` | Yes (Scale commands) | Platform API key for orchestration |
 | `IDENTITY_REGISTRY_ADDRESS` | Yes | IdentityRegistry contract |
 | `IDENTITY_STAKING_ADDRESS` | Yes | IdentityStaking contract |
 | `EVENT_REGISTRY_ADDRESS` | Yes | EventRegistry contract |

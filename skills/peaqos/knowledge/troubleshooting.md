@@ -184,3 +184,93 @@ pip install peaq-os-cli           # if not installed
 **Cause:** Previous run interrupted mid-activation.
 **Fix:** Re-run `peaqos activate` (same flags). Completed steps are skipped automatically.
 Check `peaqos.log` to see which steps completed.
+
+---
+
+## Phase: Scale / Machine Market (exit 3)
+
+**Symptom:** Exit 3 — `PEAQOS_ORCHESTRATION_URL is not configured`
+**Cause:** `PEAQOS_ORCHESTRATION_URL` env var is missing from `.env` or shell.
+**Fix:** Add `PEAQOS_ORCHESTRATION_URL=<url>` to your `.env` file. The URL is provided by your platform admin or the peaqOS team.
+
+**Symptom:** Exit 3 — `PEAQOS_ORCH_API_KEY is not configured` / `AUTH_REQUIRED`
+**Cause:** `PEAQOS_ORCH_API_KEY` env var is missing or invalid.
+**Fix:** Add `PEAQOS_ORCH_API_KEY=<key>` to your `.env` file. Obtain the key from your platform admin.
+
+---
+
+## Phase: Scale — Machine Onboard (exit 1 or 2)
+
+**Symptom:** Exit 1 — `Signer <address> is not a DID controller for this identity`
+**Cause:** The key used to sign the identity challenge does not match any controller address registered for the DID.
+**Fix:** Use `--identity-key-file` with the correct DID controller key, not a machine key or a different operator key. Verify the DID's controller addresses with `peaqos show machine <did>`.
+
+**Symptom:** Exit 1 — `--identity-signature-file and --identity-key-file are mutually exclusive`
+**Cause:** Both signing flags were passed.
+**Fix:** Use one or the other — `--identity-key-file` for automatic signing, `--identity-signature-file` for a pre-computed signature.
+
+**Symptom:** Exit 2 — `identity already exists` / `IDENTITY_CONFLICT`
+**Cause:** The machine has already been registered in the Market.
+**Fix:** Run `peaqos scale machine status <machine-id>` to check the existing registration. If status is `draft`, update rather than re-onboard.
+
+---
+
+## Phase: Scale — Agent Pairing (exit 1 or 2)
+
+**Symptom:** Exit 1 — `--agent-signature-file is required in --json mode`
+**Cause:** `--json` flag used without providing a pre-signed signature file.
+**Fix:** Either remove `--json` (interactive mode will prompt for the signature), or pass `--agent-signature-file ./agent.sig`.
+
+**Symptom:** Exit 2 — `PAIRING_PROOF_INVALID`
+**Cause:** The EIP-191 signature provided by the agent does not match the challenge message.
+**Fix:** Ensure the agent signed the exact challenge message string (including whitespace). The message is displayed during the pairing flow — relay it to the agent exactly as shown.
+
+**Symptom:** Pairing token lost / not saved
+**Cause:** The token was displayed once and the window was closed or cleared.
+**Fix:** The token cannot be recovered. Revoke the existing pairing and create a new one:
+```bash
+# List pairings to find the pairing ID
+peaqos scale machine list
+
+# Create a fresh pairing
+peaqos scale agent pair --machine-id <id> ...
+```
+
+---
+
+## Phase: Scale — Search (exit 1 or 2)
+
+**Symptom:** Exit 1 — `Could not read provider credentials file`
+**Cause:** `--provider-credentials` path does not exist or is not readable.
+**Fix:** Check the file path. Credentials file must be a valid JSON object.
+
+**Symptom:** Exit 2 — `AGENT_AUTH_REQUIRED` / `pairing token invalid`
+**Cause:** The pairing token in `--pairing-token-file` is expired, revoked, or for a different machine.
+**Fix:** Verify the token file contains the correct token for this machine. If expired, create a new agent pairing session:
+```bash
+peaqos scale agent pair --machine-id <id> ...
+```
+
+**Symptom:** No quotes returned despite valid search
+**Cause:** No providers match the service type, capabilities, or budget.
+**Fix:** Broaden the search — remove `--native-only`, increase `--budget-max`, try a different `--service-type`, or remove `--capabilities` filters.
+
+---
+
+## Phase: Scale — Orders and Payment (exit 2)
+
+**Symptom:** Exit 2 — `QUOTE_EXPIRED`
+**Cause:** Too much time elapsed between search and order placement. Quotes have a short TTL.
+**Fix:** Re-run `peaqos scale search` to get fresh quotes, then place the order immediately.
+
+**Symptom:** Exit 2 — `PAYMENT_RPC_ERROR` / `PAYMENT_TRANSFER_NOT_FOUND`
+**Cause:** The payment transaction was submitted but could not be verified on-chain (RPC lag or wrong chain).
+**Fix:** Check `PEAQOS_RPC_URL` is correct and reachable. If the tx was mined, use `--payment-tx-hash` + `--payment-chain` + `--payment-token` + `--skip-payment` to submit proof manually.
+
+**Symptom:** Order created but execution failed — status stuck at `active`
+**Cause:** The order was created and paid for but the execute step failed.
+**Fix:** Check `peaqos scale order status <order-id>`. If the order is still active, execution can be retried. If the service is unavailable, dispute the order.
+
+**Symptom:** Exit 2 — `ORDER_CLOSED`
+**Cause:** Attempted to execute, confirm, or dispute an order that is already in a terminal state.
+**Fix:** Check the current status with `peaqos scale order status <order-id>`. Terminal states: `closed`, `cancelled`, `disputed`.

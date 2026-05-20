@@ -120,3 +120,73 @@ Operator must be registered first (run `peaqos activate` in self mode before pro
 - HKD 10.00 → `--value 1000 --currency HKD`
 - JPY 100 → `--value 100 --currency JPY` (JPY has no minor unit)
 - Activity with no monetary value → `--value 0`
+
+---
+
+## Machine Market (Scale)
+
+The Machine Market is a service marketplace where machines can buy and sell capabilities. It sits on top of peaqOS on-chain identity — a machine needs a peaqID before it can enter the Market.
+
+**Plain English:** Think of it as an app store for machine services. A machine can search for services it needs (price feeds, compute, storage), place orders, and pay for them — all autonomously.
+
+---
+
+## Market Registration
+
+Registering a machine in the Market (`peaqos scale machine onboard`) is separate from on-chain activation (`peaqos activate`). On-chain activation creates the machine's permanent identity. Market registration lists the machine as a participant in the marketplace, with a display name, machine type, capabilities, and runtime profile.
+
+---
+
+## Agent Pairing
+
+An AI agent (like a Claude or LangChain instance) must be paired to a machine before it can search or order on its behalf. Pairing involves:
+1. The CLI requesting a challenge from the API
+2. The agent signing the challenge with its own key (EIP-191)
+3. The API verifying the signature and creating the pairing
+
+The result is a **pairing token** — a bearer credential that authorises the agent to act for that machine. The token is shown **once** and must be stored securely. It is passed to search and order commands via `--pairing-token-file`.
+
+---
+
+## Delegation Policy
+
+When creating an agent pairing, operators can set a delegation policy that limits what the paired agent can do:
+- `--per-tx-limit`: max spend per single transaction
+- `--daily-limit`: max total spend per day
+- `--currency`: currency for the limits
+- `--allowed-skills` / `--denied-skills`: restrict which skill keys the agent can order
+- `--allowed-service-ids` / `--denied-service-ids`: restrict which specific services the agent can use
+
+**Plain English:** Like a corporate credit card with spending controls — the agent can buy things, but only within the limits the operator set.
+
+---
+
+## Market Search and Quotes
+
+`peaqos scale search` queries the marketplace for services matching the machine's needs. The API returns a ranked list of **quotes** from available providers. Each quote has a `quote_id`, `service_id`, `score`, and `execution_mode`. The top-ranked quote is usually the best match; operators can inspect the full table and choose a different one.
+
+---
+
+## Market Orders and Payment
+
+Placing an order (`peaqos scale order <service-id>`) commits to purchasing a service. Orders go through a lifecycle:
+- `pending` → `active` → `delivered` → `closed`
+
+**Payment rails:**
+- **Not required**: some services have no cost — order flows straight to execution
+- **Wallet payment (EVM)**: funds are transferred on-chain; the CLI creates a payment intent, sends the transfer, and submits a proof automatically (OWS wallets handle this without manual steps)
+- **Escrow**: funds are locked in a smart contract until the order is confirmed or disputed
+
+**Execution modes:**
+- **Native**: the service executes directly and returns a result in the API response (HTTP 200)
+- **Handoff**: the service returns a URL for external execution (HTTP 202) — the operator or agent completes the task via that endpoint
+
+---
+
+## Order Confirmation and Disputes
+
+After execution, the buyer confirms or disputes:
+- `peaqos scale order received`: confirms delivery, releases held payment to the provider
+- `peaqos scale order dispute --reason "..."`: flags a problem, freezes payment pending resolution
+
+**Plain English:** Like accepting or rejecting a delivery. Confirm if the service did what it promised; dispute if it didn't.

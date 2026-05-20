@@ -200,6 +200,47 @@ Run through at least two distinct machine profiles and check the recommendation 
 
 ---
 
+### S8 — Scale: Machine Market end-to-end
+
+**Purpose:** Verify the full Scale guided flow — market onboard → agent pair → search → order.
+
+**Prerequisites:**
+- Complete S2 first (machine must have an on-chain identity and funded wallet)
+- `PEAQOS_ORCHESTRATION_URL` and `PEAQOS_ORCH_API_KEY` set in `.env`
+- An agent address and provider identifier to use for pairing
+- A known service type available in the Market environment being tested against
+
+**Steps:**
+1. `/peaqos`
+2. Select **E: Connect a machine to the Machine Market (Scale)**
+3. Confirm the prerequisite check passes (orchestration URL and API key detected)
+4. Select **S1: Register a machine in the Market**
+5. Provide identity ref (DID from S2), display name, owner ID, machine type, runtime profile
+6. Sign the identity challenge (use `--identity-key-file` or OWS if available)
+7. Capture the machine ID from output
+8. Select **S2: Pair an AI agent**
+9. Provide machine ID, agent address, agent provider, agent role
+10. Complete the challenge-sign flow
+11. **When pairing token appears — verify the skill pauses and explicitly instructs you to save it**
+12. Save the token to a file (e.g. `./pairing.token`)
+13. Select **S3: Search for services and place an order**
+14. Verify prerequisite check confirms machine ID, pairing ID, and token file
+15. Search with a known service type — verify results table appears with search ID and quote IDs
+16. Place an order — review payment summary before confirming
+17. Verify order executes and a completion summary is printed
+
+**Pass criteria:**
+- Prerequisite check correctly catches missing `PEAQOS_ORCHESTRATION_URL` (test by temporarily unsetting it)
+- Skill stops and warns about pairing token — does not proceed until user confirms it's saved
+- Search returns quotes and captures search ID and quote ID for use in order command
+- Order command is constructed correctly with all captured IDs
+- Completion summary includes order ID, service, status, and payment status
+- `peaqos scale order status <id>` confirms terminal state
+
+**Note:** If the Market environment does not have live services available for the tested service type, S3 can be validated to the search step only — verify that "no quotes found" is handled gracefully with actionable suggestions.
+
+---
+
 ## Known limitations (not bugs)
 
 | Limitation | Detail |

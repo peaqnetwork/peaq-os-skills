@@ -69,12 +69,14 @@ Ask the user: "Where would you like to start?" Wait for their response. Options:
 - B: Onboard real machines now (I know what I'm doing, let's go)
 - C: Manage or query an existing fleet
 - D: Troubleshoot a problem
+- E: Connect a machine to the Machine Market (Scale)
 
 Routing:
 - A → Phase 2 (Demo)
 - B → Phase 3 (Questionnaire)
 - C → Phase 8 (Fleet)
 - D → Read `knowledge/troubleshooting.md`, ask for symptom, diagnose
+- E → Phase 9 (Scale)
 
 ---
 
@@ -334,6 +336,213 @@ Ask the user: "What would you like to do?" Wait for their response. Options:
 
 Run the relevant commands from `GUIDE.md#queries--fleet-management`.
 Execute the shell command and show output. Offer to pipe through `--json` for scriptable output.
+
+---
+
+## Phase 9 — Scale / Machine Market
+
+Read `knowledge/cli-reference.md` for the full `peaqos scale` command reference throughout this phase.
+
+**Prerequisite check — fire when user selects E, not at startup**
+
+Before proceeding, verify Scale is configured:
+
+```
+peaqos whoami 2>/dev/null | head -3 || echo "NOT_CONFIGURED"
+echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
+echo "${PEAQOS_ORCH_API_KEY:-MISSING}"
+```
+
+- `NOT_CONFIGURED` → user needs to complete on-chain onboarding first (Phases 2–7). Offer to start there.
+- `PEAQOS_ORCHESTRATION_URL` missing → tell user:
+  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set in your `.env` or shell environment. This is the base URL of the Machine Markets API — your platform admin or the peaqOS team can provide this."
+  Do not proceed until set.
+- `PEAQOS_ORCH_API_KEY` missing → tell user:
+  > "`PEAQOS_ORCH_API_KEY` is required for Scale commands. Set it in your `.env` file (see `examples/.env.example`)."
+  Do not proceed until set.
+
+Once both pass, ask the user: "What would you like to do in the Machine Market?" Wait for their response. Options:
+- S1: Register a machine in the Market
+- S2: Pair an AI agent to a machine
+- S3: Search for services and place an order (guided end-to-end flow)
+- S4: Check or manage existing orders
+- S5: Troubleshoot a Scale issue
+
+Routing:
+- S1 → Machine onboard flow
+- S2 → Agent pair flow
+- S3 → Full guided flow (onboard check → pair check → search → order → execute)
+- S4 → Order management flow
+- S5 → Read `knowledge/troubleshooting.md` Scale section, ask for symptom, diagnose
+
+---
+
+### S1 — Register a machine in the Market
+
+A machine must be registered in the Market before it can buy or provide services. This is separate from `peaqos activate` — on-chain identity comes first, Market registration comes second.
+
+Collect from the user (ask interactively, one at a time):
+- `--identity-ref`: the machine's DID (`did:peaq:0x...`) or `peaqos:machine:<id>` — from `peaqos whoami` output
+- `--display-name`: human-readable name
+- `--owner-id`: operator/owner identifier
+- `--machine-type`: e.g. `edge-node`, `robot`, `sensor`
+- `--runtime-profile`: e.g. `linux-docker`
+- `--capabilities` (optional): comma-separated list
+- `--skill-keys` (optional): skill keys the machine supports, comma-separated
+
+For signing the identity challenge, offer in order:
+1. **Key file** (recommended): `--identity-key-file ./controller.key`
+2. **OWS wallet** (if `OWS_AVAILABLE=true`): automatic via active OWS wallet — no extra flag needed
+3. **Manual paste**: prompt will appear — paste the EIP-191 signature
+
+```
+peaqos scale machine onboard \
+  --identity-ref <did> \
+  --display-name "<name>" \
+  --owner-id <owner-id> \
+  --machine-type <type> \
+  --runtime-profile <profile> \
+  --capabilities <caps> \
+  --identity-key-file ./controller.key
+```
+
+Capture `machine_id` from stdout. Store it — it's needed for agent pairing and orders.
+
+On success, print:
+```
+Machine registered in the Market ✓
+  Machine ID:   <id>
+  Display name: <name>
+  Status:       active
+```
+
+→ Offer S2 (pair an agent) as the natural next step
+
+---
+
+### S2 — Pair an AI agent to a machine
+
+Agent pairing connects an AI agent to a machine and produces a **pairing token** that authorises the agent to search and order on the machine's behalf.
+
+⚠️ **The pairing token is shown exactly once. The user must copy it before continuing.**
+
+Collect from the user:
+- `--machine-id`: from S1 or `peaqos scale machine list`
+- `--agent-address`: the agent's on-chain address
+- `--agent-provider`: provider identifier (e.g. `teneo`)
+- `--agent-role`: e.g. `machine-market-buyer`
+- `--agent-did` (optional): agent DID (e.g. `did:pkh:eip155:1:0x...`)
+- Budget/delegation (optional): `--per-tx-limit`, `--daily-limit`, `--currency`
+- Skill/service restrictions (optional): `--allowed-skills`, `--denied-skills`, `--allowed-service-ids`
+
+For the signing step, the agent must sign the challenge with its own key. The CLI will display the challenge message and prompt for the signature. If the operator has the agent signature pre-computed, they can pass `--agent-signature-file`.
+
+```
+peaqos scale agent pair \
+  --machine-id <id> \
+  --agent-address <address> \
+  --agent-provider <provider> \
+  --agent-role machine-market-buyer \
+  --per-tx-limit 10.00 \
+  --daily-limit 100.00 \
+  --currency USD
+```
+
+When the pairing token appears in output, **stop and tell the user:**
+> "⚠️ Your pairing token is shown above — copy it now and store it securely. It will not be shown again. Save it to a file (e.g. `./pairing.token`) — you'll need the file path for search and order commands."
+
+Capture `pairing_id` and confirm token is saved before proceeding.
+
+→ Offer S3 (search and order) as the natural next step
+
+---
+
+### S3 — Search for services and place an order (guided end-to-end)
+
+This is the full buyer flow. Walk through each step interactively.
+
+**Step 1 — Verify prerequisites**
+
+Check the user has:
+- A machine ID (from S1 — run `peaqos scale machine list` if needed)
+- A pairing ID (from S2)
+- The pairing token saved to a file
+
+If any are missing, route back to S1 or S2 as appropriate.
+
+**Step 2 — Search the market**
+
+Collect:
+- `--service-type`: what the machine needs (e.g. `oracle.price-feed`, `compute.inference`)
+- `--pairing-token-file`: path to the saved token file
+- `--operation` (optional): specific operation (e.g. `get-latest-price`)
+- `--capabilities` (optional): required capabilities, comma-separated
+- `--region` (optional): preferred region
+- `--budget-amount` / `--budget-max` / `--budget-currency` (optional)
+- `--max-results` (optional): default returns all matches
+
+```
+peaqos scale search \
+  --machine-id <id> \
+  --service-type <type> \
+  --pairing-token-file ./pairing.token \
+  --operation <operation> \
+  --budget-amount 5.00 \
+  --budget-currency USD
+```
+
+Show the results table. Capture `search_id` and the preferred `quote_id` (top-ranked by default).
+
+If no quotes returned:
+> "No matching services found. Try removing `--native-only` if set, increasing your budget, or broadening the service type."
+
+**Step 3 — Place the order**
+
+```
+peaqos scale order <service-id> \
+  --machine-id <id> \
+  --agent-pairing-id <pairing-id> \
+  --pairing-token-file ./pairing.token \
+  --search-id <search-id> \
+  --quote-id <quote-id>
+```
+
+The CLI will show an order summary and prompt for confirmation before payment. Tell the user to review the payment details before confirming.
+
+Payment handling:
+- **No payment required**: CLI proceeds directly to execution (2-step flow)
+- **Wallet payment**: CLI creates a payment intent, sends the transfer, submits proof, then executes (5-step flow). OWS wallets handle EVM payments automatically.
+- **Pre-completed payment**: pass `--payment-tx-hash`, `--payment-chain`, `--payment-token` with `--skip-payment` if payment was handled externally
+
+Capture `order_id` from output.
+
+**Step 4 — Confirm or dispute**
+
+Once the order executes, ask the user:
+- Happy with the result? → `peaqos scale order received` (confirms delivery, releases payment)
+- Problem with the result? → `peaqos scale order dispute` (freezes payment for review)
+
+Print a summary on completion:
+```
+Order completed ✓
+  Order ID:    <id>
+  Service:     <service-id>
+  Status:      delivered
+  Payment:     released
+```
+
+---
+
+### S4 — Check or manage existing orders
+
+Ask what the user needs:
+
+- **Check a specific order**: `peaqos scale order status <order-id>`
+- **List all orders for a machine**: `peaqos scale order list --machine-id <id> --pairing-token-file ./pairing.token`
+- **Check machine status**: `peaqos scale machine status <machine-id>`
+- **List machines**: `peaqos scale machine list`
+
+Show output and offer to pipe through `--json` for scriptable results.
 
 ---
 
