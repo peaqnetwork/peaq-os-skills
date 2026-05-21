@@ -185,16 +185,16 @@ pip install "peaq-os-sdk[ows]"
 peaqos init
 # Choose: Private key source → wallet
 # Enter a wallet name and vault passphrase when prompted
-# Save the displayed mnemonic phrase securely
 ```
 
-The init wizard derives your address for all peaq networks, and writes `PEAQOS_OWS_WALLET=<name>` to `.env`.
+The init wizard derives your address for all peaq networks and writes `PEAQOS_OWS_WALLET=<name>` to `.env`. The recovery phrase is **not** printed during creation — back it up immediately afterward with `peaqos wallet export <name>` and store it somewhere safe (password manager, hardware-backed secret).
 
 **Or create directly:**
 ```bash
-peaqos wallet create my-operator          # 12-word mnemonic (default)
+peaqos wallet create my-operator             # 12-word mnemonic (default, encrypted in vault)
 peaqos wallet create my-operator --words 24  # 24-word mnemonic
-peaqos wallet use my-operator             # set as active in .env
+peaqos wallet export my-operator             # print recovery phrase (requires confirmation) — do this right after create
+peaqos wallet use my-operator                # set as active in .env
 ```
 
 **Avoid repeated passphrase prompts:**

@@ -216,7 +216,11 @@ Only present this option if `OWS_AVAILABLE=true` from the preamble check. If `OW
 peaqos init
 # Choose: Private key source → wallet
 ```
-Walk through wallet creation: name the wallet, set a vault passphrase, save the mnemonic securely.
+Walk through wallet creation: name the wallet, set a vault passphrase. The CLI does **not** display the mnemonic during creation — tell the user that immediately after the wallet is created they should back up the recovery phrase with:
+```
+peaqos wallet export <name>
+```
+and store it somewhere safe (password manager, hardware-backed secret). The export step asks for confirmation and prints the phrase to stdout once.
 After init, run `peaqos whoami` to confirm the address loaded from the vault.
 Tell them: "Your key is encrypted in `~/.ows/` — you'll be prompted for your passphrase when running commands. Set `OWS_PASSPHRASE` in your shell to avoid repeated prompts."
 Fund the address:

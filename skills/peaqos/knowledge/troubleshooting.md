@@ -250,7 +250,7 @@ peaqos scale agent pair --machine-id <id> ...
 ```bash
 peaqos scale agent pair --machine-id <id> ...
 ```
-The CLI does not currently expose a dedicated session-refresh subcommand — re-running `agent pair` is the supported refresh path. The orchestration API does have a session refresh endpoint (`POST /api/v1/machines/{machineId}/agent-pairings/{pairingId}/sessions`) for SDK callers, but the CLI surfaces it only via a fresh pairing flow today.
+The CLI does not currently expose a dedicated session-refresh subcommand — re-running `agent pair` is the supported refresh path. The orchestration API has a session refresh endpoint (`POST /api/v1/machines/{machineId}/agent-pairings/{pairingId}/sessions`), but neither the CLI nor the Python SDK wraps it today — raw HTTP is the only way to call it directly. Re-pairing is fine for most workflows.
 
 **Symptom:** `peaqos scale` returns `Error: No such command 'scale'` or similar
 **Cause:** The installed `peaq-os-cli` predates the Scale command group.
