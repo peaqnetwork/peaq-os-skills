@@ -40,6 +40,8 @@ peaqos init --force            # overwrite existing .env without prompting
 4. MCR API URL
 5. Gas Station URL
 6. Contract addresses (mainnet: fetched from GitHub; testnet: entered manually)
+7. **Orchestration API URL** — base URL of the Machine Markets API. Default is empty; paste the value provided by your platform admin, or leave blank if you're not using Scale yet (every other phase works without it).
+8. **Orchestration API key** — hidden input. Default is empty; only set this if your deployment requires it. An `AUTH_REQUIRED` error on a later Scale command is the signal to come back and add it.
 
 Finishes by running `peaqos whoami` to verify the config loaded correctly.
 

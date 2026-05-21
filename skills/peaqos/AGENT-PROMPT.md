@@ -91,6 +91,11 @@ Run install commands. Verify with `peaqos --version`.
 Run `peaqos init` interactively. Pre-fill the agung testnet values from `GUIDE.md#network-reference`.
 If the user is uncertain about any prompt, tell them the default to use.
 When prompted for "Private key source", recommend `generate` for the demo. If they want better key security, they can choose `wallet` to create an OWS encrypted vault wallet instead (see `GUIDE.md#admin-wallet-options` for details — requires `pip install "peaq-os-sdk[ows]"`).
+
+The wizard now also asks two Scale-related prompts near the end:
+- **Orchestration API URL** — for a demo on testnet, the current test endpoint is `http://3.76.48.82`. If the user isn't planning to touch Phase 9 (Scale), they can hit enter to leave it blank — every other phase works without it.
+- **Orchestration API key** — hidden input. Almost always left blank; only set this if the user already has a key from the peaqOS team. If a later Scale command returns `AUTH_REQUIRED`, that's the signal to re-run `peaqos init` (or edit `.env`) and add it.
+
 After init, run `peaqos whoami` and show them the output.
 
 **⚠️ Verify `.env` contract addresses before proceeding**
@@ -369,7 +374,7 @@ echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
   Do not proceed until `peaqos scale --help` exits 0.
 - `NOT_CONFIGURED` → user needs to complete on-chain onboarding first (Phases 2–7). Offer to start there.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
-  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set in your `.env` or shell environment. This is the base URL of the Machine Markets API — your platform admin or the peaqOS team can provide this. The pre-launch test endpoint (HTTP) is `http://3.76.48.82`; the production HTTPS endpoint will be announced before mainnet launch."
+  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set. The easiest fix is `peaqos init` — the wizard now prompts for the Orchestration API URL and writes it to `.env`. Alternatively, add `PEAQOS_ORCHESTRATION_URL=<url>` to your `.env` manually. The current pre-launch test endpoint is `http://3.76.48.82`; the production HTTPS endpoint will be announced before mainnet launch."
   Do not proceed until set.
 - `PEAQOS_ORCH_API_KEY` — **optional**. Some deployments require it; others do not. If the user has one, they should set it in `.env`. If they get an `AUTH_REQUIRED` error when running Scale commands, that is the signal to set it.
 
