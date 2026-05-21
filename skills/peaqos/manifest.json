@@ -1,7 +1,7 @@
 {
   "name": "peaqos",
   "version": "0.1.0",
-  "description": "Onboard machines and fleet operators to peaqOS — peaq's financial OS for autonomous machines — using the peaq-os-cli Python CLI. Handles machine registration, peaqID creation, Machine NFT minting, Machine Credit Rating (MCR) setup, event submission, and fleet management. Works on both agung testnet and mainnet. Adapts to developers and non-technical operators alike.",
+  "description": "Onboard machines and fleet operators to peaqOS — peaq's financial OS for autonomous machines — using the peaq-os-cli Python CLI. Handles machine registration, peaqID creation, Machine NFT minting, Machine Credit Rating (MCR) setup, event submission, fleet management, and the full Scale / Machine Market flow (market onboarding, AI-agent pairing, service search, order placement, and dispute resolution). Works on both agung testnet and mainnet. Adapts to developers and non-technical operators alike.",
   "entrypoint": "AGENT-PROMPT.md",
   "capabilities_required": [
     "shell_exec",
@@ -18,17 +18,22 @@
     "examples/.env.example"
   ],
   "adapters": [
-    "adapters/claude-code/SKILL.md"
+    "adapters/claude-code/SKILL.md",
+    "adapters/cursor/SKILL.md",
+    "adapters/windsurf/SKILL.md"
   ],
   "cli_dependency": {
     "package": "peaq-os-cli",
-    "pypi": false,
+    "pypi": true,
     "install_from_source": "https://github.com/peaqnetwork/peaq-os-cli-py",
-    "python_min": "3.10"
+    "python_min": "3.10",
+    "notes": "Scale / Machine Market commands require a CLI release that ships the `scale` command group. If `peaqos scale --help` fails, upgrade with `pip install --upgrade peaq-os-cli`."
   },
   "keywords": [
     "peaq", "peaqos", "peaqid", "mcr", "depin", "machine-economy",
-    "machine-nft", "machine-credit-rating", "did", "onboarding", "blockchain"
+    "machine-nft", "machine-credit-rating", "did", "onboarding", "blockchain",
+    "machine-market", "scale", "agent-pairing", "service-discovery",
+    "market-orders", "autonomous-agents"
   ],
   "links": {
     "homepage": "https://peaq.xyz",
