@@ -270,7 +270,7 @@ peaqos wallet create my-operator --json
 | `--words 12\|24` | `12` | Mnemonic word count |
 | `--json` | false | Machine-readable output |
 
-Prompts for vault passphrase. Prints address and mnemonic — **save the mnemonic immediately**.
+Prompts for vault passphrase. Prints the address and stores the encrypted wallet in `~/.ows/`. **The mnemonic is not displayed during creation** — back it up immediately afterward with `peaqos wallet export <name>` (requires interactive confirmation) and store the phrase somewhere safe.
 
 ### `peaqos wallet import <name>`
 

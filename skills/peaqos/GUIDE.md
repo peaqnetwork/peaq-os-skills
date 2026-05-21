@@ -185,16 +185,16 @@ pip install "peaq-os-sdk[ows]"
 peaqos init
 # Choose: Private key source → wallet
 # Enter a wallet name and vault passphrase when prompted
-# Save the displayed mnemonic phrase securely
 ```
 
-The init wizard derives your address for all peaq networks, and writes `PEAQOS_OWS_WALLET=<name>` to `.env`.
+The init wizard derives your address for all peaq networks and writes `PEAQOS_OWS_WALLET=<name>` to `.env`. The recovery phrase is **not** printed during creation — back it up immediately afterward with `peaqos wallet export <name>` and store it somewhere safe (password manager, hardware-backed secret).
 
 **Or create directly:**
 ```bash
-peaqos wallet create my-operator          # 12-word mnemonic (default)
+peaqos wallet create my-operator             # 12-word mnemonic (default, encrypted in vault)
 peaqos wallet create my-operator --words 24  # 24-word mnemonic
-peaqos wallet use my-operator             # set as active in .env
+peaqos wallet export my-operator             # print recovery phrase (requires confirmation) — do this right after create
+peaqos wallet use my-operator                # set as active in .env
 ```
 
 **Avoid repeated passphrase prompts:**
@@ -376,6 +376,142 @@ peaqos show operator machines did:peaq:0x<operator> --json \
 ```bash
 peaqos show operator machines did:peaq:0x<operator> --json \
   | jq '.machines[] | select(.mcr_score >= 75) | {did, mcr_score, mcr}'
+```
+
+---
+
+## Scale / Machine Market {#scale}
+
+> **Experimental — pre-launch.** The Scale API surface and CLI flags may change without notice until the public release. Treat anything here as subject to revision. Set `PEAQOS_ORCHESTRATION_URL` in your `.env` before any `peaqos scale ...` command (see `examples/.env.example`). `PEAQOS_ORCH_API_KEY` is only required if the deployment you connect to enforces it.
+
+### Two machine IDs — don't mix them up
+
+- **On-chain machine ID** — positive integer returned by `peaqos activate` (e.g. `42`). Used by `peaqos qualify event --machine-id`.
+- **Market machine ID** — string like `mach_abc123` returned by `peaqos scale machine onboard`. Used by every `peaqos scale ...` command.
+
+These are different identifiers — the integer ID from `activate` will not work in the Market and vice versa.
+
+### Two auth modes for `peaqos scale ...`
+
+| Auth | Commands | How to authenticate |
+|------|----------|---------------------|
+| Platform | `machine list`, `machine status`, `machine onboard`, `order list`, `order status` | Uses `PEAQOS_ORCH_API_KEY` if set; otherwise unauthenticated reads against the API. |
+| Agent pairing | `search`, `order <service-id>`, `order received`, `order dispute` | Requires `--pairing-token-file ./path/to/pairing.token` containing the bearer token from `peaqos scale agent pair`. |
+
+### Step 1 — Register the machine in the Market
+
+Requires the machine already activated on-chain (Step 4 of the demo).
+
+```bash
+peaqos scale machine onboard \
+  --identity-ref did:peaq:0x<machine-address> \
+  --display-name "Solar Inverter #4821" \
+  --owner-id <owner-id> \
+  --machine-type edge-node \
+  --runtime-profile linux-docker \
+  --capabilities inference,data-feed \
+  --identity-key-file ./controller.key
+```
+
+Signing the identity challenge (checked in this order):
+1. `--identity-signature-file ./signed.txt` — pre-computed EIP-191 signature
+2. `--identity-key-file ./controller.key` — sign automatically with the DID controller key
+3. Active OWS wallet (`PEAQOS_OWS_WALLET` set) — signs via the vault
+4. Manual prompt — the CLI displays the challenge and asks you to paste the signature
+
+The plain `PEAQOS_PRIVATE_KEY` in `.env` does **not** auto-sign the identity challenge — without `--identity-key-file` or an OWS wallet, the CLI falls through to the manual prompt every time.
+
+Capture the `mach_*` machine ID from the output — you'll need it for every other `scale` command.
+
+### Step 2 — Pair an AI agent
+
+Pairing returns a one-shot **pairing token** that authorises the agent to search and order on the machine's behalf.
+
+```bash
+peaqos scale agent pair \
+  --machine-id mach_<id> \
+  --agent-address 0x<agent-address> \
+  --agent-provider teneo \
+  --agent-role machine-market-buyer \
+  --per-tx-limit 10.00 \
+  --daily-limit 100.00 \
+  --currency USD
+```
+
+The pairing token is shown exactly once. Save it immediately:
+```bash
+# When the token appears in output, copy it and write it to a file
+echo "<token>" > ./pairing.token && chmod 600 ./pairing.token
+```
+
+If the token is lost or the session expires (`AGENT_AUTH_REQUIRED`), re-run `peaqos scale agent pair` to create a fresh pairing — the CLI does not currently expose a dedicated session-refresh subcommand.
+
+### Step 3 — Search the Market
+
+```bash
+peaqos scale search \
+  --machine-id mach_<id> \
+  --service-type oracle.price-feed \
+  --pairing-token-file ./pairing.token \
+  --operation get-latest-price \
+  --budget-amount 5.00 \
+  --budget-currency USD
+```
+
+Useful filters:
+- `--native-only` — only return services that execute directly via the API (no external handoff)
+- `--allow-handoff` — explicitly include services that hand off to an external endpoint
+- `--region eu-west` — preferred region
+- `--capabilities realtime,verified` — required service capabilities
+
+Output includes a `search_id` and per-quote `quote_id` / `service_id` / `score` / `execution_mode`. Capture the top-ranked quote for the order step.
+
+If nothing comes back: remove `--native-only`, add `--allow-handoff`, raise `--budget-max`, or broaden `--service-type`.
+
+### Step 4 — Place an order
+
+```bash
+peaqos scale order <service-id> \
+  --machine-id mach_<id> \
+  --agent-pairing-id <pairing-id> \
+  --pairing-token-file ./pairing.token \
+  --search-id <search-id> \
+  --quote-id <quote-id>
+```
+
+Payment shape depends on the service:
+- **No payment required** — 2-step create → execute, no flags needed
+- **Wallet payment (EVM)** — 5-step create → intent → send → proof → execute, handled automatically when an OWS wallet is active
+- **Pre-completed payment** — pass `--payment-tx-hash <hash> --payment-chain <chain> --payment-token <token> --skip-payment`
+
+The CLI prints an order summary and asks for confirmation before any transfer. Capture the `order_id`.
+
+### Step 5 — Confirm or dispute
+
+```bash
+# Confirm delivery — releases held payment
+peaqos scale order received <order-id> --pairing-token-file ./pairing.token
+
+# Dispute — freezes payment, --reason is required
+peaqos scale order dispute <order-id> \
+  --reason "Service output did not match expected schema" \
+  --pairing-token-file ./pairing.token
+```
+
+### Order management recipes
+
+```bash
+# Status of one order (platform auth — no pairing token needed)
+peaqos scale order status <order-id>
+
+# All orders for a machine, paginated
+peaqos scale order list --machine-id mach_<id> --limit 20
+
+# Next page
+peaqos scale order list --machine-id mach_<id> --limit 20 --cursor <cursor-from-previous-output>
+
+# Machine-readable for scripts
+peaqos scale order list --machine-id mach_<id> --json | jq '.orders[] | {id, status, service_id}'
 ```
 
 ---
