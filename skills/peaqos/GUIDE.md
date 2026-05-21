@@ -545,6 +545,6 @@ peaqos scale order list --machine-id mach_<id> --json | jq '.orders[] | {id, sta
 | `PEAQOS_NETWORK` | `mainnet` |
 | Chain ID | 3338 |
 | RPC URL | `https://peaq.api.onfinality.io/public` |
-| MCR API | `https://api.peaqos.io` |
+| MCR API | `https://mcr.peaq.xyz` |
 | Gas Station | `https://depinstation.peaq.xyz` |
 | Contract addresses | Fetched automatically by `peaqos init` from GitHub |

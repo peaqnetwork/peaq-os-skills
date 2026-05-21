@@ -2,7 +2,7 @@
 
 A framework-agnostic agent skill that onboards machine operators to [peaqOS](https://peaq.xyz) — peaq's financial OS for autonomous machines. It guides you through the full setup using the `peaqos` CLI: giving your machine a permanent on-chain identity (peaqID), an ownership NFT, and a Machine Credit Rating (MCR) built from verified event history.
 
-Works on both **agung testnet** (free, no real money) and **mainnet**. Ships with a Claude Code adapter out of the box — porting to other agent frameworks requires only a thin adapter file.
+Works on both **agung testnet** (free, no real money) and **mainnet**. Ships with adapters for Claude Code, Cursor, and Windsurf out of the box — porting to other agent frameworks requires only a thin adapter file.
 
 ---
 
@@ -13,7 +13,8 @@ Invoke `/peaqos` in Claude Code and the skill will:
 - **Demo mode** — walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
 - **Real onboarding** — ask five questions about your machine and deployment, recommend the right architecture (self-managed or proxy-managed), then execute the CLI commands to register, mint, and verify
 - **Fleet management** — check MCR scores, list all machines for an operator, find machines with low or no rating, submit heartbeat events
-- **Troubleshooting** — diagnose common failures (funding, activation errors, MCR lag, key mismatches) and walk you through the fix
+- **Scale / Machine Market** — register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery)
+- **Troubleshooting** — diagnose common failures (funding, activation errors, MCR lag, key mismatches, Scale auth) and walk you through the fix
 
 Adapts its language to your background: concise and direct for developers, plain English with narrated steps for hobbyists and first-timers.
 
@@ -85,6 +86,13 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 | Check MCR score | `peaqos qualify mcr did:peaq:0x<address>` |
 | Inspect machine profile | `peaqos show machine did:peaq:0x<address>` |
 | List fleet | `peaqos show operator machines did:peaq:0x<operator>` |
+| Register a machine in the Market | `peaqos scale machine onboard --identity-ref did:peaq:0x<addr> --display-name "<name>" --owner-id <owner> --machine-type <type> --runtime-profile <profile> --identity-key-file ./controller.key` |
+| Pair an AI agent to a machine | `peaqos scale agent pair --machine-id mach_<id> --agent-address 0x<addr> --agent-provider <name> --agent-role machine-market-buyer` |
+| Search the Market | `peaqos scale search --machine-id mach_<id> --service-type <type> --pairing-token-file ./pairing.token` |
+| Place an order | `peaqos scale order <service-id> --machine-id mach_<id> --agent-pairing-id <pairing-id> --pairing-token-file ./pairing.token --search-id <search-id> --quote-id <quote-id>` |
+| Confirm order delivery | `peaqos scale order received <order-id> --pairing-token-file ./pairing.token` |
+| Dispute an order | `peaqos scale order dispute <order-id> --reason "<reason>" --pairing-token-file ./pairing.token` |
+| List orders for a machine | `peaqos scale order list --machine-id mach_<id>` |
 
 ---
 
@@ -92,17 +100,21 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 
 ```
 peaqos-skill/
-├── AGENT-PROMPT.md               # Framework-agnostic orchestration (8-phase logic, routing, security)
+├── AGENT-PROMPT.md               # Framework-agnostic orchestration (9-phase logic, routing, security)
 ├── manifest.json                 # Metadata, capability requirements, adapter list
-├── GUIDE.md                      # Portable operator manual — full CLI recipes
+├── GUIDE.md                      # Portable operator manual — full CLI recipes incl. Scale
 ├── knowledge/
 │   ├── decision-tree.md          # Architecture questionnaire & recommendation matrix
-│   ├── concepts.md               # peaqID, MCR, trust levels, bond, visibility
-│   ├── cli-reference.md          # Every command, flag, env var, exit code
-│   └── troubleshooting.md        # Symptom → cause → fix
+│   ├── concepts.md               # peaqID, MCR, trust levels, bond, visibility, Scale concepts
+│   ├── cli-reference.md          # Every command, flag, env var, exit code (incl. `peaqos scale`)
+│   └── troubleshooting.md        # Symptom → cause → fix (incl. Scale auth & pairing)
 ├── adapters/
-│   └── claude-code/
-│       └── SKILL.md              # Claude Code adapter (thin wrapper over AGENT-PROMPT.md)
+│   ├── claude-code/
+│   │   └── SKILL.md              # Claude Code adapter (thin wrapper over AGENT-PROMPT.md)
+│   ├── cursor/
+│   │   └── SKILL.md              # Cursor adapter
+│   └── windsurf/
+│       └── SKILL.md              # Windsurf adapter
 └── examples/
     └── .env.example              # Annotated env template for both networks
 ```
