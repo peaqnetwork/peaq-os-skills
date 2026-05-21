@@ -352,16 +352,20 @@ These are different identifiers. Do not mix them up when collecting values from 
 
 **Prerequisite check — fire when user selects E, not at startup**
 
-Before proceeding, verify Scale is configured:
+Before proceeding, verify Scale is available and configured:
 
 ```
+peaqos scale --help >/dev/null 2>&1 && echo "SCALE_OK" || echo "SCALE_MISSING"
 peaqos whoami 2>/dev/null | head -3 || echo "NOT_CONFIGURED"
 echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
 ```
 
+- `SCALE_MISSING` → the installed `peaq-os-cli` does not include the `scale` command group yet. Tell user:
+  > "Your installed `peaq-os-cli` doesn't include the Scale commands. Upgrade with `pip install --upgrade peaq-os-cli` and re-run `/peaqos`. If you've already upgraded and still see this, your virtualenv may be cached — run `peaqos --version` to confirm."
+  Do not proceed until `peaqos scale --help` exits 0.
 - `NOT_CONFIGURED` → user needs to complete on-chain onboarding first (Phases 2–7). Offer to start there.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
-  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set in your `.env` or shell environment. This is the base URL of the Machine Markets API — your platform admin or the peaqOS team can provide this."
+  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set in your `.env` or shell environment. This is the base URL of the Machine Markets API — your platform admin or the peaqOS team can provide this. The pre-launch test endpoint (HTTP) is `http://3.76.48.82`; the production HTTPS endpoint will be announced before mainnet launch."
   Do not proceed until set.
 - `PEAQOS_ORCH_API_KEY` — **optional**. Some deployments require it; others do not. If the user has one, they should set it in `.env`. If they get an `AUTH_REQUIRED` error when running Scale commands, that is the signal to set it.
 

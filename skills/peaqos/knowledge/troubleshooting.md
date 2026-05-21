@@ -246,10 +246,20 @@ peaqos scale agent pair --machine-id <id> ...
 
 **Symptom:** Exit 2 — `AGENT_AUTH_REQUIRED` / `pairing token invalid`
 **Cause:** The pairing token in `--pairing-token-file` is expired, revoked, or for a different machine.
-**Fix:** Verify the token file contains the correct token for this machine. If expired, create a new agent pairing session:
+**Fix:** Verify the token file contains the correct token for this machine. If expired, create a fresh pairing:
 ```bash
 peaqos scale agent pair --machine-id <id> ...
 ```
+The CLI does not currently expose a dedicated session-refresh subcommand — re-running `agent pair` is the supported refresh path. The orchestration API does have a session refresh endpoint (`POST /api/v1/machines/{machineId}/agent-pairings/{pairingId}/sessions`) for SDK callers, but the CLI surfaces it only via a fresh pairing flow today.
+
+**Symptom:** `peaqos scale` returns `Error: No such command 'scale'` or similar
+**Cause:** The installed `peaq-os-cli` predates the Scale command group.
+**Fix:** Upgrade the CLI:
+```bash
+pip install --upgrade peaq-os-cli
+peaqos scale --help   # confirm the group is registered
+```
+If you installed from source, pull the latest and reinstall with `pip install -e .` from the CLI repo root.
 
 **Symptom:** No quotes returned despite valid search
 **Cause:** No providers match the service type, capabilities, or budget.
