@@ -54,6 +54,8 @@ When prompted:
 - **MCR API URL:** `https://mcr.peaq.xyz`
 - **Gas Station URL:** leave blank (not available on agung)
 - **Contract addresses:** enter the agung values from `examples/.env.example`
+- **Orchestration API URL:** the default Machine Markets API is `https://orchestration.peaq.xyz`. Use that unless your platform admin gave you a different URL. If you're not planning to use Scale (Phase 9), hit enter to leave it blank.
+- **Orchestration API key:** leave blank unless your deployment requires one. If you later see an `AUTH_REQUIRED` error from a Scale command, that's the signal to set this and re-run.
 
 Verify with `peaqos whoami` — should show Chain ID 9990.
 

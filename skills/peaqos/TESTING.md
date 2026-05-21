@@ -207,7 +207,7 @@ Run through at least two distinct machine profiles and check the recommendation 
 **Prerequisites:**
 - Complete S2 first (machine must have an on-chain identity and funded wallet)
 - Installed `peaq-os-cli` must include the `scale` command group — confirm with `peaqos scale --help`. If the command is unknown, run `pip install --upgrade peaq-os-cli`.
-- `PEAQOS_ORCHESTRATION_URL` set in `.env` (required). The current pre-launch test endpoint is `http://3.76.48.82`; the production HTTPS endpoint will be announced before mainnet launch.
+- `PEAQOS_ORCHESTRATION_URL` set in `.env` (required). The default Machine Markets API is `https://orchestration.peaq.xyz` — replace it only if your platform admin gave you a different URL.
 - `PEAQOS_ORCH_API_KEY` set if the deployment requires it (optional — only needed if a Scale command returns `AUTH_REQUIRED`).
 - An agent address and provider identifier to use for pairing
 - A known service type available in the Market environment being tested against
