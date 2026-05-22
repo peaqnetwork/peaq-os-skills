@@ -32,6 +32,18 @@ Adapts its language to your background: concise and direct for developers, plain
 
 ## Install the CLI
 
+System dependencies first — `peaq-os-cli` pulls in `pycairo` (via `svglib`), which needs Cairo + pkg-config installed at the OS level. Without them, `pip install` fails with a Meson build error.
+
+```bash
+# macOS
+brew install cairo pkg-config
+
+# Ubuntu / Debian
+sudo apt-get install -y libcairo2-dev pkg-config
+```
+
+Then install the CLI:
+
 ```bash
 python3 -m venv .peaqos-env
 source .peaqos-env/bin/activate

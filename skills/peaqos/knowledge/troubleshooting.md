@@ -180,6 +180,17 @@ source .peaqos-env/bin/activate   # if using venv
 pip install peaq-os-cli           # if not installed
 ```
 
+**Symptom:** `pip install peaq-os-cli` fails with `metadata-generation-failed`, mentioning `pycairo`, `meson.build`, `Dependency lookup for cairo`, or `pkg-config` not found
+**Cause:** `peaq-os-cli` pulls in `pycairo` (via `svglib`), which builds against the system Cairo library. The build fails when Cairo or `pkg-config` aren't installed at the OS level.
+**Fix:** Install the system dependencies first, then re-run `pip install peaq-os-cli`:
+```bash
+# macOS
+brew install cairo pkg-config
+
+# Ubuntu / Debian
+sudo apt-get install -y libcairo2-dev pkg-config
+```
+
 **Symptom:** Partial activation — some steps confirmed in `peaqos.log`, some missing
 **Cause:** Previous run interrupted mid-activation.
 **Fix:** Re-run `peaqos activate` (same flags). Completed steps are skipped automatically.
