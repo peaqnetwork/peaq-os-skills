@@ -137,8 +137,8 @@ Compare the exact transaction calldata between the CLI and SDK calls to isolate 
 **Fix:** Wait for the rate limit window to reset, or adjust operational limits.
 
 **Symptom:** Exit 2 — `ValueCapExceeded`
-**Cause:** Event value exceeds configured per-tx cap.
-**Fix:** Check your SDK or CLI configuration for `--max-value-per-tx`.
+**Cause:** The event `--value` exceeds the per-transaction cap enforced by the `EventRegistry` contract on-chain. This is a protocol-level limit, not a CLI setting.
+**Fix:** Submit the event with a smaller `--value` (remember it's in ISO 4217 subunits — `1000` = $10.00, not $1000). If your machine genuinely needs a higher cap, contact the peaq team — the limit is configured on the contract, not in the CLI or `.env`.
 
 ---
 
