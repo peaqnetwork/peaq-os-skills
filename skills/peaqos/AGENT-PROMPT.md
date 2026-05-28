@@ -85,7 +85,7 @@ Routing:
 Read `GUIDE.md#demo-happy-path` for the full step content. Walk through each step interactively.
 
 **Step 1 — Install CLI**
-Before running `pip install peaq-os-cli`, tell the user they need system Cairo + pkg-config installed first (the CLI pulls in `pycairo` via `svglib`, which builds against the system Cairo library). On macOS: `brew install cairo pkg-config`. On Ubuntu/Debian: `sudo apt-get install -y libcairo2-dev pkg-config`. Without these, `pip install` fails with a cryptic Meson error about missing `cairo` / `pkg-config`. Then run install commands. Verify with `peaqos --version`.
+Run install commands. Verify with `peaqos --version`.
 
 **Step 2 — Configure**
 Run `peaqos init` interactively. Pre-fill the agung testnet values from `GUIDE.md#network-reference`.
