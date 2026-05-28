@@ -8,16 +8,6 @@ Framework-agnostic manual for the `peaqos` CLI. Any agent or human can read and 
 
 Requires Python ≥ 3.10.
 
-**System dependencies first.** `peaq-os-cli` pulls in `svglib` → `pycairo`, which builds against the system Cairo library. Without it, `pip install` fails with a Meson error about missing `cairo` / `pkg-config`.
-
-```bash
-# macOS
-brew install cairo pkg-config
-
-# Ubuntu / Debian
-sudo apt-get install -y libcairo2-dev pkg-config
-```
-
 **From PyPI:**
 
 ```bash
