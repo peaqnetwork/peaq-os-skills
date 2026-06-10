@@ -31,6 +31,7 @@ Contract addresses, RPC endpoints, and network constants for the `peaqos` CLI.
 | `PEAQOS_RPC_URL` | `https://peaq.api.onfinality.io/public` |
 | `PEAQOS_MCR_API_URL` | `https://api.peaqos.io` |
 | `PEAQOS_GAS_STATION_URL` | `https://depinstation.peaq.xyz` |
+| `PEAQOS_ORCHESTRATION_URL` | `https://orchestration.peaq.xyz` |
 | `IDENTITY_REGISTRY_ADDRESS` | `0xb53Af985765031936311273599389b5B68aC9956` |
 | `IDENTITY_STAKING_ADDRESS` | `0x11c05A650704136786253e8685f56879A202b1C7` |
 | `EVENT_REGISTRY_ADDRESS` | `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA` |

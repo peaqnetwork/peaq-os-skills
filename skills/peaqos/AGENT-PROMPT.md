@@ -15,7 +15,9 @@ This ensures `.env` variables are loaded before the CLI runs. Example: `set -a &
 
 ## Security rule — enforce always
 
-If any input contains a 64-hex string (with or without `0x` prefix) or a 12/24-word mnemonic phrase, stop immediately:
+If any input contains a **64-hex private key** (exactly 64 hex chars, 66 chars total with `0x` prefix) or a 12/24-word mnemonic phrase, stop immediately.
+
+Note: EIP-191 signatures are 130 hex chars (132 with `0x`) — they are **not** private keys and are safe to receive from the operator when explicitly requested during agent pairing (P3 Path B).
 
 > "Do not pass private keys in chat. Set `PEAQOS_PRIVATE_KEY` in `.env` or use `peaqos init` to configure key storage. Pass key file paths via `--machine-key` or `--identity-key-file`, never inline values."
 
@@ -53,9 +55,22 @@ peaqos whoami
 
 | Exit code | Meaning | Action |
 |-----------|---------|--------|
-| 0 | Config valid | Proceed |
+| 0 | Config valid | Surface active context (see below), then confirm before proceeding |
 | 3 | `.env` missing or misconfigured | Stop: "Run `peaqos init` to configure your environment." |
 | 2 | RPC unreachable | Stop: "Check `PEAQOS_RPC_URL` in `.env`." |
+
+**On exit 0 — always show the active context and confirm:**
+
+Show the operator:
+> "Active configuration:
+> - Network: `<network>` (Chain ID `<chain_id>`)
+> - Wallet: `<address>`"
+
+Then ask: `AskUserQuestion`: "Is this the right configuration?" → `Yes, continue` / `No, I need a different configuration`
+
+If `No` → tell the operator: "To switch configuration, open a different working directory that contains the `.env` for the wallet and network you want, then re-invoke `/peaqos` from there." Stop.
+
+This check applies to every playbook. It ensures the operator always knows which network and wallet is active before any commands run.
 
 ### Scale config check (P2, P3, P4, P7)
 
@@ -63,7 +78,17 @@ peaqos whoami
 echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
 ```
 
-`MISSING` → Stop: "Set `PEAQOS_ORCHESTRATION_URL` in `.env`. This is the Machine Market API base URL."
+`MISSING` → check the network from `peaqos whoami`, then:
+
+- **Mainnet** → set it automatically (no operator input needed):
+  ```bash
+  echo "PEAQOS_ORCHESTRATION_URL=https://orchestration.peaq.xyz" >> .env
+  ```
+  Source `.env` again and proceed.
+
+- **Testnet** → the staging URL is environment-specific. `AskUserQuestion`: "Do you have a testnet Machine Market API URL?" → `Yes, I have it` / `No, I need to get one`
+  - `Yes` → ask for the URL (free text), write to `.env`: `echo "PEAQOS_ORCHESTRATION_URL=<url>" >> .env`, source and proceed.
+  - `No` → Stop: "Contact the peaqOS team to get the testnet Machine Market API URL. Once you have it, re-invoke this option."
 
 ### Token file check (P4, P7-C, P7-D)
 
@@ -224,11 +249,13 @@ Confirm address and network with operator before proceeding.
 
 **Step 3 — Activate** ⚠️ *Requires operator confirmation — irreversible on-chain action*
 
-Before running, confirm the wallet is funded:
-- **Testnet:** `AskUserQuestion`: "Wallet funded with testnet tokens?" → `Yes, ready to activate` / `No, need to fund first`. If not funded → direct to faucet: https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens (3 AGNG/day limit).
-- **Mainnet:** `AskUserQuestion`: "Does this wallet have PEAQ tokens for gas?" → `Yes, wallet is funded` / `No, need to transfer PEAQ first`. If not funded → tell operator to transfer PEAQ to `<wallet_address>`, then confirm when ready.
+**Testnet only — confirm wallet is funded before running:**
 
-Wait for confirmation before proceeding.
+`AskUserQuestion`: "Wallet funded with testnet tokens?" → `Yes, ready to activate` / `No, need to fund first`
+
+If not funded → direct to faucet: https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens (3 AGNG/day limit). Wait for confirmation before proceeding.
+
+**Mainnet — no manual funding needed.** The gas station handles it automatically during activation steps 2–3. Step 2 will render a QR code to the terminal — surface this to the operator: "Open your authenticator app, scan the QR code, then enter the TOTP code when prompted." Step 3 then calls the gas station automatically with that code to fund the wallet. Do not ask the operator to fund the wallet manually.
 
 Use the doc-url and data-api collected in inputs. If the operator did not provide values, use placeholder URLs — do not omit these flags or step 6 will fail:
 
@@ -261,84 +288,37 @@ peaqos activate \
 Notes:
 - `activate` is idempotent — safe to re-run after partial failure; completed steps are skipped
 - Progress goes to stderr; stdout contains Machine ID, Token ID, and Machine DID (plus Machine Address and Operator DID in proxy mode)
-- Testnet: fund wallet via faucet before running; use `--skip-funding` to bypass steps 1–3
-- **Mainnet interactive checkpoint:** On mainnet without `--skip-funding`, step 2 pauses and renders a QR code to the terminal. Surface this to the operator: "Open your authenticator app, scan the QR code, then enter the TOTP code when prompted." Wait for the operator to complete this step. Step 3 then calls the gas station automatically.
+- Testnet: fund wallet via faucet first, then use `--skip-funding` to bypass steps 1–3
+- Mainnet (normal): do not use `--skip-funding`. The gas station handles funding via a 2FA/TOTP flow. Follow the steps below.
+- Mainnet (gas station unavailable): if `activate` exits 2 with `Faucet error: NETWORK_ERROR`, offer: `AskUserQuestion`: "Gas station is unavailable. How would you like to proceed?" → `Fund wallet manually and skip gas station` / `Retry later`. If manual: tell the operator to transfer PEAQ to `<wallet_address>`, confirm when done, then run with `--skip-funding`.
 
-**Step 4 — Submit baseline event**
+**Mainnet 2FA handling (when gas station is reachable):**
 
-There is a known CLI bug where `peaqos qualify event` fails with a VM revert even when the machine is correctly staked. Use the SDK directly instead — it is more reliable for event submission:
+The Bash tool has no TTY, so `peaqos activate` aborts when it can't get TOTP input. Use this two-step approach:
 
+Step A — Run activate to capture the QR URL (it will abort — that's expected):
 ```bash
-python3 - << 'PYEOF'
-import os, sys, time
-from web3 import Web3
-from eth_account import Account
-
-# Explicit env var reads — avoids load_dotenv() frame issues in Python 3.14+
-private_key = os.environ["PEAQOS_PRIVATE_KEY"]
-rpc_url     = os.environ.get("PEAQOS_RPC_URL", "https://peaq-agung.api.onfinality.io/public")
-event_reg   = os.environ["EVENT_REGISTRY_ADDRESS"]
-machine_id  = int(sys.argv[1])
-
-w3      = Web3(Web3.HTTPProvider(rpc_url))
-account = Account.from_key(private_key)
-
-# Exact ABI from EventRegistry.json — parameter order and types verified from contract source
-ABI = [{"inputs":[
-    {"name":"machineId",    "type":"uint256"},
-    {"name":"eventType",    "type":"uint8"},
-    {"name":"value",        "type":"uint256"},
-    {"name":"currency",     "type":"string"},
-    {"name":"timestamp",    "type":"uint256"},
-    {"name":"dataHash",     "type":"bytes32"},   # dataHash BEFORE trustLevel
-    {"name":"trustLevel",   "type":"uint8"},
-    {"name":"sourceChainId","type":"uint256"},    # uint256, not uint8
-    {"name":"sourceTxHash", "type":"bytes32"},
-    {"name":"metadata",     "type":"bytes"}],
-    "name":"submitEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]
-
-contract = w3.eth.contract(address=Web3.to_checksum_address(event_reg), abi=ABI)
-
-# Brief wait to allow bonding state to settle after activation
-time.sleep(5)
-
-tx = contract.functions.submitEvent(
-    machine_id,         # machineId
-    1,                  # eventType: 1=activity (0=revenue)
-    0,                  # value
-    "",                 # currency (empty for activity)
-    int(time.time()),   # timestamp
-    b'\x00'*32,         # dataHash
-    0,                  # trustLevel: 0=self
-    0,                  # sourceChainId: 0=same chain
-    b'\x00'*32,         # sourceTxHash
-    b''                 # metadata
-).build_transaction({
-    "from": account.address,
-    "nonce": w3.eth.get_transaction_count(account.address),
-    "gas": 200000,
-    "gasPrice": w3.eth.gas_price,
-})
-signed  = account.sign_transaction(tx)
-tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-print(f"tx_hash={tx_hash.hex()} status={receipt.status}")
-PYEOF
+set -a && source .env && set +a && peaqos activate \
+  --doc-url "<doc-url>" --data-api "<data-api>" 2>&1 || true
 ```
+Parse the QR image URL from the output (look for `QR image URL: https://...`).
 
-Run as: `set -a && source .env && set +a && python3 <script> <machine-id>`
+Step B — Display the QR inline and collect the TOTP code:
+Fetch the QR image URL and display it to the operator. Ask:
+`AskUserQuestion`: "Scan the QR code with your authenticator app and enter the 6-digit code" (free text — 6 digits)
 
-`status=1` → event landed. `status=0` → revert (wait 10s and retry once — bonding lag immediately after activate can cause transient reverts).
-
-**Step 5 — Verify MCR**
-
+Step C — Re-run with the code piped to stdin:
 ```bash
-peaqos qualify mcr <machine-did> --json
+set -a; source .env; set +a; printf "<totp_code>\n" | peaqos activate \
+  --doc-url "<doc-url>" --data-api "<data-api>"
 ```
+Note the semicolons (not `&&`) so the pipe connects to just `peaqos activate`.
 
-Poll every 15s for up to 90s. In `--json` output, read the `mcr` field. Terminate when `mcr` is any value other than `Provisioned`.
+**Step 4 — Complete**
 
-**Important:** After a fresh activation the MCR indexer takes several minutes to index a new machine, not just 90s. If `qualify mcr` returns "Machine not found" or `Provisioned` after the polling window, **this is not a failure** — the machine is registered on-chain. Stop polling, surface the outputs, and proceed. The operator can check MCR status later via P6.
+Onboarding is complete once `activate` succeeds. Surface the outputs and point the operator to the next steps. Do not attempt event submission or MCR checks here — the bonding state needs time to settle after a fresh activation, and these are ongoing operations with their own dedicated playbooks.
+
+> "Your machine is registered on-chain. To start building your Machine Credit Rating, submit events via **P5 — Submit machine events** (use Machine ID `<machine_id>`). To check MCR status, use **P6 — Query machine status** (use Machine DID `<machine_did>`)."
 
 ### Outputs
 
@@ -366,74 +346,62 @@ Registers an on-chain machine in the Scale Machine Market. Produces a Market mac
 
 ### Inputs (collect all upfront)
 
+Read `identity_ref` and `operator_address` from `peaqos whoami` output — do not ask the operator for these.
+
 | Input | Required | Notes |
 |-------|----------|-------|
-| `--identity-ref` | Yes | Machine DID (`did:peaq:0x...`) from P1 |
-| `--display-name` | Yes | Human-readable name |
-| `--owner-id` | Yes | Operator/owner identifier |
-| `--machine-type` | Yes | e.g. `edge-node`, `robot`, `sensor` |
-| `--runtime-profile` | Yes | e.g. `linux-docker` |
-| Signing method | Yes | See signing modes below |
-| `--capabilities` | No | Comma-separated capability list |
-| `--skill-keys` | No | Skill keys the machine supports, comma-separated |
-| `--labels` | No | `key=value` pairs, comma-separated |
+| `--identity-ref` | Yes | Use the Machine DID from `peaqos whoami` (`did:peaq:0x<address>`) — already known from preflight |
+| `--display-name` | Yes | Ask: "What would you like to name this machine?" (free text, e.g. "My Edge Node") |
+| `--owner-id` | Yes | Default to the wallet address from `peaqos whoami` — only ask if the operator wants something different |
+| `--machine-type` | Yes | `AskUserQuestion`: options: `edge-node` / `compute-node` / `iot-device` / `robot` / `sensor` / `Other (I'll type it)` |
+| `--runtime-profile` | Yes | `AskUserQuestion`: options: `linux-docker` / `linux-native` / `Other (I'll type it)` |
+| `--capabilities` | No | Ask: "Any capabilities to declare? (comma-separated, or skip)" |
+| `--skill-keys` | No | Skip unless operator explicitly wants to set these |
+| `--labels` | No | Skip unless operator explicitly wants to set these |
 
-**Signing modes — ask using `AskUserQuestion`:** "How would you like to sign the identity challenge?"
-- `Key file` — I have a DID controller private key file (`--identity-key-file`)
-- `Pre-signed file` — I have a pre-computed EIP-191 signature file (`--identity-signature-file`)
-- `OWS wallet` — `PEAQOS_OWS_WALLET` is set in `.env` (signs automatically)
-- `Manual paste` — I'll paste the signature when prompted
+**Signing — handle automatically, do not ask:**
 
-| Mode | Condition | Flags |
-|------|-----------|-------|
-| Key file | Have a DID controller key file | `--identity-key-file <path>` |
-| Pre-signed file | Have a pre-computed EIP-191 signature file | `--identity-signature-file <path>` |
-| OWS wallet | `PEAQOS_OWS_WALLET` set in `.env` | No extra flag — signs automatically |
-| Manual paste | None of the above | CLI displays challenge; operator pastes EIP-191 signature |
+Check `.env` for `PEAQOS_OWS_WALLET` first. If set, OWS wallet signs automatically — no key file needed.
 
-> Note: `PEAQOS_PRIVATE_KEY` in `.env` does **not** auto-sign the identity challenge. Without `--identity-signature-file`, `--identity-key-file`, or an OWS wallet, the CLI always falls through to manual paste. `--identity-signature-file` and `--identity-key-file` are mutually exclusive — passing both exits 1.
+If `PEAQOS_OWS_WALLET` is not set, the operator's `PEAQOS_PRIVATE_KEY` in `.env` IS the DID controller key for a self-managed machine. Extract it to a temporary key file and use that:
+
+```bash
+grep PEAQOS_PRIVATE_KEY .env | cut -d= -f2 > /tmp/peaqos_controller.key && chmod 600 /tmp/peaqos_controller.key
+```
+
+Then pass `--identity-key-file /tmp/peaqos_controller.key`. Clean up after the command completes: `rm /tmp/peaqos_controller.key`.
+
+Only fall back to manual paste if neither OWS nor `PEAQOS_PRIVATE_KEY` is available.
 
 ### Execute
 
 ⚠️ *Requires operator confirmation before registration*
 
+Determine the signing flag automatically:
+- If `PEAQOS_OWS_WALLET` is set in `.env` → no signing flag needed (OWS auto-signs)
+- Otherwise → extract key to temp file first, then use `--identity-key-file`
+
 ```bash
-# With key file (non-interactive, supports --json)
+# Step 1 (if not using OWS): extract key to temp file
+grep PEAQOS_PRIVATE_KEY .env | cut -d= -f2 > /tmp/peaqos_ctrl.key && chmod 600 /tmp/peaqos_ctrl.key
+
+# Step 2: register
 peaqos scale machine onboard \
-  --identity-ref <did> \
+  --identity-ref <did-from-whoami> \
   --display-name "<name>" \
-  --owner-id <owner-id> \
+  --owner-id <address-from-whoami> \
   --machine-type <type> \
   --runtime-profile <profile> \
   [--capabilities <caps>] \
-  [--skill-keys <keys>] \
-  [--labels <labels>] \
-  --identity-key-file <path> \
+  --identity-key-file /tmp/peaqos_ctrl.key \
   --yes \
   --json
 
-# With pre-signed file (non-interactive, supports --json)
-peaqos scale machine onboard \
-  --identity-ref <did> \
-  --display-name "<name>" \
-  --owner-id <owner-id> \
-  --machine-type <type> \
-  --runtime-profile <profile> \
-  --identity-signature-file <path> \
-  --yes \
-  --json
-
-# Manual paste (omit --json — it will exit 1 without a signing method)
-peaqos scale machine onboard \
-  --identity-ref <did> \
-  --display-name "<name>" \
-  --owner-id <owner-id> \
-  --machine-type <type> \
-  --runtime-profile <profile> \
-  --yes
+# Step 3: clean up temp file
+rm /tmp/peaqos_ctrl.key
 ```
 
-> Note: passing `--json` without `--identity-key-file`, `--identity-signature-file`, or an active OWS wallet exits 1 immediately — no partial state is created and it is safe to correct and retry.
+If the command exits 2 with a signer mismatch error, the key in `.env` doesn't control the machine DID — the operator will need to provide the correct key file manually via `--identity-key-file <path>`. If it exits with a manual paste prompt (unexpected), surface the challenge text to the operator and wait for their EIP-191 signature.
 
 ### Outputs
 
@@ -461,51 +429,142 @@ Creates an agent pairing and issues a one-time pairing token. Prerequisite: P2 c
 | `--machine-id` | Yes | Market machine ID (`mach_*`) from P2 |
 | `--agent-address` | Yes | Agent's on-chain EVM address |
 | `--agent-provider` | Yes | Provider identifier (e.g. `virtuals`, `teneo`) |
-| `--agent-role` | Yes | e.g. `machine-market-buyer` |
-| `--agent-did` | No | Agent DID (e.g. `did:pkh:eip155:1:0x...`) |
-| `--description` | No | Human-readable pairing description |
-| `--agent-signature-file` | **Required if using `--json`** | Path to pre-computed EIP-191 signature file. Optional otherwise. Passing `--json` without this flag exits 1. |
+| `--agent-role` | Yes | `machine-market-buyer` (default for purchasing agents) |
 | `--per-tx-limit` | No | Max spend per transaction |
 | `--daily-limit` | No | Max daily spend |
 | `--currency` | No | Budget currency (e.g. `USD`) |
-| `--allowed-skills` | No | Comma-separated allowed skill keys |
-| `--denied-skills` | No | Comma-separated denied skill keys |
-| `--allowed-service-ids` | No | Comma-separated allowed service IDs |
-| `--denied-service-ids` | No | Comma-separated denied service IDs |
+
+Then ask: `AskUserQuestion`: "Do you have access to the agent's private key (e.g. from your Virtuals signer)?" → `Yes, I have the key` / `No, I'll sign externally`
 
 ### Execute
 
-```bash
-# With --agent-signature-file (non-interactive, supports --json)
-peaqos scale agent pair \
-  --machine-id <market-machine-id> \
-  --agent-address <address> \
-  --agent-provider <provider> \
-  --agent-role <role> \
-  --agent-signature-file <path> \
-  [--per-tx-limit <n>] \
-  [--daily-limit <n>] \
-  [--currency <code>] \
-  [--allowed-skills <keys>] \
-  --yes \
-  --json
+**Do not use the CLI to submit the pairing.** The CLI fetches its own fresh challenge when it runs, so the challenge_id it submits won't match the signature. Use direct API calls for both paths.
 
-# Without --agent-signature-file (human mode — blocks on signature prompt)
-peaqos scale agent pair \
-  --machine-id <market-machine-id> \
-  --agent-address <address> \
-  --agent-provider <provider> \
-  --agent-role <role> \
-  [--per-tx-limit <n>] \
-  [--daily-limit <n>] \
-  [--currency <code>] \
-  [--allowed-skills <keys>] \
-  --yes
+---
+
+**Path A — Operator has the agent's private key**
+
+Instruct the operator:
+> "Save the agent's private key to a temp file in your terminal: `echo '0xYOUR_AGENT_KEY' > /tmp/agent.key && chmod 600 /tmp/agent.key` — confirm here when done."
+
+Then run this single script — get challenge, sign, submit pairing, return token:
+
+```bash
+python3 - << 'PYEOF'
+import os, sys, requests
+from web3 import Web3
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
+machine_id = sys.argv[1]
+agent_addr = Web3.to_checksum_address(sys.argv[2])
+provider   = sys.argv[3]
+role       = sys.argv[4]
+orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
+api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
+headers    = {"Content-Type": "application/json"}
+if api_key: headers["x-api-key"] = api_key
+
+with open("/tmp/agent.key") as f:
+    agent = Account.from_key(f.read().strip())
+
+r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings/challenges",
+    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role},
+    headers=headers)
+r.raise_for_status()
+challenge = r.json()["item"]
+
+sig = "0x" + agent.sign_message(encode_defunct(text=challenge["message"])).signature.hex()
+
+r2 = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings",
+    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role,
+          "agentProof": {"challengeId": challenge["challenge_id"], "signature": sig}},
+    headers=headers)
+if not r2.ok:
+    print(f"Error {r2.status_code}: {r2.text}"); sys.exit(1)
+pairing = r2.json()["item"]
+print(f"pairing_id={pairing['id']}")
+print(f"pairing_token={pairing.get('pairing_token','NOT_RETURNED')}")
+PYEOF
 ```
 
-> **Signing modes:**
-> - With `--agent-signature-file` + `--json`: fully non-interactive. The pairing ID is at `.id` and the pairing token is at `.pairing_token` in the JSON response. Extract: `jq -r '.id'` for pairing ID, `jq -r '.pairing_token'` for the token.
-> - Without `--agent-signature-file` (human mode): the CLI prints the challenge message to stderr, then blocks on "Paste the EIP-191 signature:" prompt. Surface the challenge message to the operator, wait for them to provide the signature, enter it at the prompt. The pairing token then appears in stdout. `--yes` suppresses the "Confirm pairing?" prompt — always include it to avoid a second blocking prompt.
+Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role>`
+
+Clean up: `rm -f /tmp/agent.key`
+
+---
+
+**Path B — Operator will sign externally (Virtuals, HSM, etc.)**
+
+**Step 1 — Get challenge and save challenge_id:**
+
+```bash
+python3 - << 'PYEOF'
+import os, sys, requests
+from web3 import Web3
+
+machine_id = sys.argv[1]
+agent_addr = Web3.to_checksum_address(sys.argv[2])
+provider   = sys.argv[3]
+role       = sys.argv[4]
+orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
+api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
+headers    = {"Content-Type": "application/json"}
+if api_key: headers["x-api-key"] = api_key
+
+r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings/challenges",
+    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role},
+    headers=headers)
+if not r.ok:
+    print(f"Error {r.status_code}: {r.text}"); sys.exit(1)
+c = r.json()["item"]
+open("/tmp/challenge_id.txt", "w").write(c["challenge_id"])
+print(f"expires_at={c['expires_at']}")
+print("--- SIGN THIS EXACT TEXT WITH EIP-191 (personal_sign) ---")
+print(c["message"])
+print("--- END ---")
+PYEOF
+```
+
+Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role>`
+
+Show the challenge message to the operator. Then ask using `AskUserQuestion` free text:
+> "Sign the message above using EIP-191 personal_sign with the agent wallet. ⏱️ Expires at `<expires_at>`. Paste the 0x-prefixed signature — it is safe to paste, it is not a private key."
+
+**Step 2 — Submit pairing using the saved challenge_id:**
+
+```bash
+python3 - << 'PYEOF'
+import os, sys, requests
+from web3 import Web3
+
+machine_id = sys.argv[1]
+agent_addr = Web3.to_checksum_address(sys.argv[2])
+provider   = sys.argv[3]
+role       = sys.argv[4]
+signature  = sys.argv[5].replace(" ","").replace("\n","").strip()
+orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
+api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
+headers    = {"Content-Type": "application/json"}
+if api_key: headers["x-api-key"] = api_key
+
+challenge_id = open("/tmp/challenge_id.txt").read().strip()
+
+r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings",
+    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role,
+          "agentProof": {"challengeId": challenge_id, "signature": signature}},
+    headers=headers)
+if not r.ok:
+    print(f"Error {r.status_code}: {r.text}"); sys.exit(1)
+pairing = r.json()["item"]
+print(f"pairing_id={pairing['id']}")
+print(f"pairing_token={pairing.get('pairing_token','NOT_RETURNED')}")
+PYEOF
+```
+
+Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role> <signature>`
+
+Clean up: `rm -f /tmp/challenge_id.txt`
 
 ### ⚠️ Pairing token gate
 
