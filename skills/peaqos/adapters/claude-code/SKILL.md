@@ -1,15 +1,13 @@
 ---
 name: peaqos
 description: |
-  Onboard machines and fleet operators to peaqOS — peaq's financial OS for autonomous machines —
-  using the peaq-os-cli Python CLI. Use this skill when someone asks to: register a machine on
-  peaq, get a peaqID or Machine NFT, set up a Machine Credit Rating (MCR), submit machine events,
-  check an MCR score, manage a DePIN fleet, onboard to peaqOS, or connect a machine to the
-  Machine Market. Also handles Scale workflows: registering machines in the market, pairing AI
-  agents, searching for services, placing and managing market orders. Handles both agung testnet
-  and mainnet. Adapts tone to developers and non-technical operators alike. Invoke on any mention
-  of peaqOS, peaqID, MCR, machine registration, DePIN onboarding, the peaqos CLI, Machine Market,
-  Scale, agent pairing, market orders, or service discovery.
+  Execute peaqOS machine operations using the peaq-os-cli. Provides agent-executable playbooks for:
+  onboarding a machine on-chain (peaqID, Machine NFT, MCR baseline), registering a machine in the
+  Machine Market, pairing an AI agent to a machine, searching for services and placing market orders,
+  submitting machine events, querying MCR and fleet status, and managing existing orders. Handles
+  both agung testnet and mainnet. Invoke on any mention of peaqOS, peaqID, MCR, machine registration,
+  peaqos activate, qualify event, qualify mcr, Machine Market, Scale, agent pairing, market orders,
+  service discovery, or the peaqos CLI.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
 compatibility: Requires Python 3.10+ and peaq-os-cli
@@ -17,8 +15,8 @@ compatibility: Requires Python 3.10+ and peaq-os-cli
 
 # peaqOS — Claude Code Adapter
 
-Load and follow `AGENT-PROMPT.md` from the skill root. All phase logic, routing, security rules,
-and tone calibration are defined there.
+Load and follow `AGENT-PROMPT.md` from the skill root. All playbook logic, routing, preflight checks,
+and security rules are defined there.
 
 Knowledge files are in `knowledge/` and `GUIDE.md` — read them at runtime as directed by
 `AGENT-PROMPT.md`. Do not duplicate their content here.

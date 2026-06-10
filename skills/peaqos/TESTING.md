@@ -1,243 +1,347 @@
-# peaqOS Skill — Internal Test Guide
+# peaqOS Skill — Test Guide
 
-Pre-release QA checklist for the `/peaqos` Claude Code skill. Run through all scenarios before shipping.
+QA checklist for the `/peaqos` skill. Tests are organised by playbook. Run P1 first — most other playbooks depend on its outputs.
 
 ---
 
 ## Setup
 
-**1. Install the CLI from source**
+**Install the CLI:**
 
-The CLI has a Cairo dependency (via `svglib`). Install the system libraries first or `pip install` will fail:
-
-```bash
-# macOS
-brew install cairo pkg-config
-
-# Ubuntu / Debian
-sudo apt-get install -y libcairo2-dev pkg-config
-```
-
-Then install the CLI:
+The Cairo/svglib dependency was removed in the latest CLI version — no system prerequisites needed.
 
 ```bash
-git clone https://github.com/peaqnetwork/peaq-os-cli-py
-cd peaq-os-cli-py
-pip install -e .
-peaqos --version   # confirm binary is on PATH
+pip install peaq-os-cli
+pip install 'peaq-os-sdk[ows]'   # optional — for OWS wallet tests
+peaqos --version
 ```
 
-Install globally (not in a project venv) so Claude Code can find it when executing shell commands.
+Note: P1 will also offer to install the CLI automatically if it detects it is missing. You can test this path via S-PRE (see below) without pre-installing.
 
-**2. Install the skill**
-
-Claude Code discovers skills by scanning `~/.claude/skills/`. Each subfolder with a `SKILL.md` at its root is registered as a slash command — the command name comes from the `name` field in the frontmatter (`name: peaqos` → `/peaqos`).
-
-Get the `peaqos-skill/` folder onto your machine (clone this repo or receive it directly), then point Claude Code at the adapter inside it:
+**Install the skill (symlink for fast iteration):**
 
 ```bash
-# Symlink — edits to skill files take effect immediately (recommended for testing)
-ln -s "/path/to/peaqos-skill/adapters/claude-code" ~/.claude/skills/peaqos
-
-# Copy — use this if you just want a stable snapshot
-cp -r /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
+mkdir -p ~/.claude/skills
+ln -s "/path/to/peaq-os-skills/skills/peaqos" ~/.claude/skills/peaqos
 ```
 
-Verify it's picked up by starting a Claude Code session and typing `/peaqos` — the skill should launch immediately. No restart or additional configuration required.
-
-**3. Get testnet tokens**
-
-You'll need agung testnet tokens for scenarios 2 and 3. Request them at:
-https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens
-
-Limit: 3 AGNG per address per day. Request before starting — takes 1–2 minutes to arrive.
-
-**4. Open Claude Code in a clean working directory**
+**Clean test directory:**
 
 ```bash
 mkdir ~/peaqos-test && cd ~/peaqos-test
 claude
 ```
 
-Using a fresh directory avoids leftover `.env` and `peaqos.log` files interfering with tests.
+**Testnet tokens** (needed for P1, P2):
+Request at: https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens
+Limit: 3 AGNG/address/day. Request before starting.
 
 ---
 
-## Scenarios
+## Security
 
-### S1 — Preamble: CLI not installed
+### S-SEC — Private key refusal
 
-**Purpose:** Verify the skill catches a missing CLI gracefully before Phase 1.
-
-**Setup:** Temporarily rename the binary: `mv $(which peaqos) $(which peaqos).bak`
+**Purpose:** Confirm the skill never echoes or stores a private key regardless of context.
 
 **Steps:**
-1. `/peaqos`
+1. `/peaqos` (any entry point)
+2. Paste: `0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef`
 
 **Pass criteria:**
-- Skill detects CLI is missing
-- Offers to run install commands
-- Does not proceed to Phase 1 until resolved
+- Skill stops immediately with the refusal message
+- Does not echo, acknowledge, or store the value
+- Redirects to `peaqos init` / `.env`
+
+---
+
+## Preflight
+
+### S-PRE — Missing CLI
+
+**Purpose:** Confirm the skill catches a missing CLI before any playbook runs.
+
+**Setup:** `mv $(which peaqos) $(which peaqos).bak`
+
+**Steps:**
+1. `/peaqos` → select any playbook
+
+**Pass criteria:**
+- Skill detects CLI is not installed
+- Reports clearly with install command
+- Does not attempt to run any CLI commands
 
 **Cleanup:** `mv $(which peaqos).bak $(which peaqos)`
 
----
+### S-PRE2 — Missing .env
 
-### S2 — Demo path (Phase 1 → A → Phase 2)
+**Purpose:** Confirm base config check fails fast with a clear message.
 
-**Purpose:** Full happy-path testnet walkthrough, end to end.
-
-**Steps:**
-1. `/peaqos`
-2. Select **A: Try the testnet demo**
-3. Follow the skill through all 6 steps (install → init → fund → activate → event → MCR)
-
-**Pass criteria:**
-- Step 2 (init): `peaqos whoami` shows Chain ID 9990
-- Step 3 (fund): Skill correctly directs to faucet, not gas station
-- Step 4 (activate): Captures Machine ID, Token ID, Machine DID from stdout
-- Step 5 (event): `activity` event with `--value 0` submits without error; tx hash captured
-- Step 6 (MCR): Either MCR shows score/rating, or skill correctly explains indexer lag and falls back to `peaqos show machine`
-- Proof block printed at end with all 5 fields (DID, Machine ID, NFT token, Events, MCR)
-- After demo, AskUserQuestion offers "What next?" with real onboarding / fleet / done options
-
-**Known timing quirk:** MCR indexer can take up to 90 seconds after the first event. If it stays `Provisioned`, the skill should poll and eventually fall back to chain-direct lookup — this is expected behaviour, not a failure.
-
----
-
-### S3 — Architecture questionnaire (Phase 1 → B)
-
-**Purpose:** Verify Q1–Q5 routing and recommendation matrix produce correct outputs.
-
-Run through at least two distinct machine profiles and check the recommendation matches `knowledge/decision-tree.md`.
-
-**Profile A — Cloud VM, root access, always-online:**
-- Q1: Cloud VM / Q2: Cloud / Q3: Always-online / Q4: Root / Q5: Existing wallet
-- Expected: **Architecture A — Self-managed**
-
-**Profile B — IoT sensor, customer premises, intermittent, black box:**
-- Q1: IoT sensor / Q2: Customer premises / Q3: Intermittent / Q4: Black box / Q5: Generate new keypair
-- Expected: **Architecture B — Proxy-managed**
-
-**Pass criteria:**
-- Each question is asked once via AskUserQuestion (not repeated)
-- Recommendation output matches the matrix in `knowledge/decision-tree.md`
-- Includes a brief "Why" explanation
-- AskUserQuestion confirms fit before proceeding to Phase 5
-
----
-
-### S4 — Fleet management (Phase 1 → C)
-
-**Purpose:** Verify fleet query commands execute and output is shown correctly.
-
-**Prerequisite:** At least one activated machine (run S2 first and note the operator DID from `peaqos whoami`).
+**Setup:** Fresh directory with no `.env`.
 
 **Steps:**
-1. `/peaqos`
-2. Select **C: Manage or query an existing fleet**
-3. Test each sub-option:
-   - **A: Check a machine's MCR** — enter the DID from S2
-   - **B: List all machines for an operator** — enter operator DID
-   - **D: Submit a heartbeat event** — enter machine ID from S2
+1. `/peaqos` → select P2, P3, P4, P5, or P6
 
 **Pass criteria:**
-- Each command executes and returns output (not an error)
-- `--json` piping offered for scriptable output
-- Machine ID / DID from S2 resolves correctly
+- `peaqos whoami` exits 3
+- Skill reports the config error and directs operator to `peaqos init`
+- Does not attempt further execution
+
+### S-PRE3 — Missing PEAQOS_ORCHESTRATION_URL
+
+**Purpose:** Confirm Scale config check blocks P2–P4, P7 correctly.
+
+**Setup:** `.env` present and valid (P1 complete) but no `PEAQOS_ORCHESTRATION_URL`.
+
+**Steps:**
+1. `/peaqos` → select P2, P3, P4, or P7
+
+**Pass criteria:**
+- Skill detects missing URL and stops
+- Reports exactly what is missing
+- Does not attempt any scale commands
 
 ---
 
-### S5 — Troubleshooting path (Phase 1 → D)
+## P1 — Onboard a machine to peaqOS
 
-**Purpose:** Verify the skill correctly diagnoses known failure modes.
+*Requires testnet tokens.*
+
+### P1-A — Self-managed, testnet
 
 **Steps:**
-1. `/peaqos`
-2. Select **D: Troubleshoot a problem**
-3. Test these symptoms one at a time:
-   - "Step 4 fails: Proxy operator is not registered"
-   - "MCR score is 0 after submitting events"
-   - "TOTP code rejected"
+1. `/peaqos` → P1
+2. Mode: self-managed, network: testnet
+3. Follow through: verify config → confirm activation → baseline event → MCR check
 
 **Pass criteria:**
-- Diagnosis matches `knowledge/troubleshooting.md` for each symptom
-- Fix steps are actionable and specific (not generic "check your config")
-- Does not suggest pasting a private key at any point
+- `peaqos whoami` shows Chain ID 9990 before activation
+- `peaqos activate --skip-funding` completes all 6 steps
+- Outputs captured: `machine_id` (integer), `token_id`, `machine_did`
+- Baseline activity event submits without error; tx hash captured
+- `peaqos qualify mcr <did>` returns a result (poll up to 90s; `Provisioned` acceptable)
+- Skill surfaces all 3 named outputs clearly at completion
+
+### P1-B — Proxy-managed, testnet
+
+**Prerequisite:** Operator wallet already registered (P1-A run first in self mode).
+
+**Steps:**
+1. `/peaqos` → P1
+2. Mode: proxy-managed; provide machine address and key file path
+3. Follow through activation
+
+**Pass criteria:**
+- Activation completes with `--for` and `--machine-key` flags
+- Both `machine_did` and `operator_did` surfaced in outputs
+
+### P1-C — Existing environment detected
+
+**Prerequisite:** P1-A completed (`.env` and `peaqos.log` exist).
+
+**Steps:**
+1. Stay in same directory
+2. `/peaqos` → P1
+
+**Pass criteria:**
+- Preflight detects existing `.env`, runs `peaqos whoami`
+- Skill asks whether operator is activating a new machine or resuming
+- Does not force a fresh `peaqos init`
 
 ---
 
-### S6 — Security: private key refusal
+## P2 — Register machine in Machine Market
 
-**Purpose:** Confirm the skill refuses private key input and never echoes it.
+*Requires P1 complete and `PEAQOS_ORCHESTRATION_URL` set.*
+
+### P2-A — Key file signing
 
 **Steps:**
-1. `/peaqos` (any phase)
-2. Paste a fake 64-hex string prefixed with `0x`, e.g.:
-   `0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef`
+1. `/peaqos` → P2
+2. Provide DID from P1, display name, owner ID, machine type, runtime profile
+3. Signing method: key file
 
 **Pass criteria:**
-- Skill immediately stops and shows the refusal message
-- Does not echo, store, or acknowledge the value
-- Redirects to `PEAQOS_PRIVATE_KEY` in `.env` and `peaqos init`
+- Preflight passes (whoami + Scale config)
+- `peaqos scale machine onboard` runs with `--identity-key-file` and `--yes --json`
+- `market_machine_id` (`mach_*` string) captured and surfaced
+- Skill distinguishes Market machine ID from on-chain integer machine ID
+
+### P2-B — Manual paste signing
+
+**Steps:** Same as P2-A but without `--identity-key-file` (no OWS wallet active).
+
+**Pass criteria:**
+- Skill warns that `PEAQOS_PRIVATE_KEY` does not auto-sign
+- CLI prompts for EIP-191 signature paste
+- `market_machine_id` captured from human-mode output
 
 ---
 
-### S7 — Existing environment detected
+## P3 — Pair an AI agent
 
-**Purpose:** Verify the preamble correctly identifies a prior setup and offers to skip ahead.
+*Requires P2 complete.*
 
-**Setup:** Run S2 first (so `.env` and `peaqos.log` exist in the working directory).
+### P3-A — Interactive signing, token gate
 
 **Steps:**
-1. Stay in the same working directory
-2. `/peaqos`
+1. `/peaqos` → P3
+2. Provide market machine ID, agent address, provider, role
+3. No `--agent-signature-file`
 
 **Pass criteria:**
-- Preamble detects existing `.env` and runs `peaqos whoami`
-- If whoami succeeds, skill notes the configured address and offers to skip to Phase 6 (onboarding)
-- Does not force user to re-run init
+- Preflight passes
+- CLI runs and prompts for agent signature
+- After command completes, skill stops and explicitly instructs operator to save the pairing token
+- Does not proceed until operator confirms token is saved
+- `pairing_id` surfaced in outputs
+
+### P3-B — Pre-signed signature file
+
+**Steps:** Same as P3-A with `--agent-signature-file` provided.
+
+**Pass criteria:**
+- `--json` mode used (requires signature file)
+- Pairing token gate still fires — operator must confirm token saved
+- `pairing_id` and confirmation that token is in file captured
 
 ---
 
-### S8 — Scale: Machine Market end-to-end
+## P4 — Search for services and place an order
 
-**Purpose:** Verify the full Scale guided flow — market onboard → agent pair → search → order.
+*Requires P3 complete and pairing token file available.*
 
-**Prerequisites:**
-- Complete S2 first (machine must have an on-chain identity and funded wallet)
-- `PEAQOS_ORCHESTRATION_URL` set in `.env` (required); `PEAQOS_ORCH_API_KEY` set if the deployment requires it (optional)
-- An agent address and provider identifier to use for pairing
-- A known service type available in the Market environment being tested against
+### P4-A — No-payment service
 
 **Steps:**
-1. `/peaqos`
-2. Select **E: Connect a machine to the Machine Market (Scale)**
-3. Confirm the prerequisite check passes (orchestration URL detected; API key check is skipped as it is optional)
-4. Select **S1: Register a machine in the Market**
-5. Provide identity ref (DID from S2), display name, owner ID, machine type, runtime profile
-6. Sign the identity challenge (use `--identity-key-file` or OWS if available)
-7. Capture the machine ID from output
-8. Select **S2: Pair an AI agent**
-9. Provide machine ID, agent address, agent provider, agent role
-10. Complete the challenge-sign flow
-11. **When pairing token appears — verify the skill pauses and explicitly instructs you to save it**
-12. Save the token to a file (e.g. `./pairing.token`)
-13. Select **S3: Search for services and place an order**
-14. Verify prerequisite check confirms machine ID, pairing ID, and token file
-15. Search with a known service type — verify results table appears with search ID and quote IDs
-16. Place an order — review payment summary before confirming
-17. Verify order executes and a completion summary is printed
+1. `/peaqos` → P4
+2. Provide machine ID, pairing ID, token file path, service type
+3. Follow search → order → confirm
 
 **Pass criteria:**
-- Prerequisite check correctly catches missing `PEAQOS_ORCHESTRATION_URL` (test by temporarily unsetting it)
-- Skill stops and warns about pairing token — does not proceed until user confirms it's saved
-- Search returns quotes and captures search ID and quote ID for use in order command
-- Order command is constructed correctly with all captured IDs
-- Completion summary includes order ID, service, status, and payment status
-- `peaqos scale order status <id>` confirms terminal state
+- Preflight passes including token file check
+- Search returns results; `search_id` and lead `quote_id`/`service_id` captured
+- Order placed with `--json`; `order_id` captured
+- Confirmation step runs `order received`
 
-**Note:** If the Market environment does not have live services available for the tested service type, S3 can be validated to the search step only — verify that "no quotes found" is handled gracefully with actionable suggestions.
+### P4-B — No quotes returned
+
+**Steps:** Use a service type unlikely to have providers (e.g. `compute.nonexistent`).
+
+**Pass criteria:**
+- Skill reports no results clearly
+- Suggests: remove `--native-only`, add `--allow-handoff`, increase budget, broaden type
+- Does not proceed to order placement
+
+### P4-C — Prerequisite check: missing token file
+
+**Setup:** Provide a path to a non-existent token file.
+
+**Pass criteria:**
+- Token file check catches missing file before any commands run
+- Reports the correct path and asks operator to correct it
+
+---
+
+## P5 — Submit machine events
+
+*Requires P1 complete.*
+
+### P5-A — Activity event
+
+**Steps:**
+1. `/peaqos` → P5
+2. Provide machine ID (integer), type: activity, value: 0, ts: now
+
+**Pass criteria:**
+- `peaqos qualify event` runs with `--json`
+- `tx_hash` and `data_hash` surfaced
+
+### P5-B — Revenue event with currency
+
+**Steps:** Same with type: revenue, non-zero value, currency code (e.g. `HKD`).
+
+**Pass criteria:**
+- Command includes `--currency HKD`
+- Tx submitted without error
+
+### P5-C — onchain trust requires source-tx
+
+**Steps:** Select `--trust onchain` without providing `--source-tx`.
+
+**Pass criteria:**
+- Skill catches the missing `--source-tx` before running the command (validation error)
+- Reports exit 1 with clear message
+
+---
+
+## P6 — Query machine or fleet status
+
+*Requires P1 complete.*
+
+### P6-A — MCR query
+
+**Steps:**
+1. `/peaqos` → P6 → sub-action A
+2. Provide machine DID
+
+**Pass criteria:**
+- `peaqos qualify mcr <did> --json` runs
+- Output surfaced to operator
+
+### P6-B — Full machine profile
+
+**Steps:** Sub-action B with machine DID.
+
+**Pass criteria:** `peaqos show machine <did> --json` runs and output surfaced.
+
+### P6-C — Operator fleet
+
+**Steps:** Sub-action C with operator DID from `peaqos whoami`.
+
+**Pass criteria:** `peaqos show operator machines <did> --json` runs.
+
+### P6-D — Market status
+
+*Requires Scale config.*
+
+**Steps:** Sub-action D with market machine ID.
+
+**Pass criteria:** `peaqos scale machine status <id> --json` runs; output surfaced.
+
+---
+
+## P7 — Manage existing orders
+
+*Requires P2 complete and at least one order placed (P4).*
+
+### P7-A — List orders
+
+**Steps:**
+1. `/peaqos` → P7 → sub-action A
+2. Provide market machine ID
+
+**Pass criteria:**
+- `peaqos scale order list --machine-id <id> --json` runs
+- No pairing token required
+
+### P7-B — Order status
+
+**Steps:** Sub-action B with a known order ID.
+
+**Pass criteria:** `peaqos scale order status <id> --json` runs without a pairing token.
+
+### P7-C — Confirm delivery
+
+**Steps:** Sub-action C with order ID and token file.
+
+**Pass criteria:** `peaqos scale order received` runs with `--pairing-token-file`.
+
+### P7-D — Dispute order
+
+**Steps:** Sub-action D with order ID, reason, and token file.
+
+**Pass criteria:** `peaqos scale order dispute` runs with `--reason` and `--pairing-token-file`.
 
 ---
 
@@ -245,13 +349,13 @@ Run through at least two distinct machine profiles and check the recommendation 
 
 | Limitation | Detail |
 |------------|--------|
-| Gas station unavailable on testnet | Expected — skill routes to faucet correctly |
-| MCR indexer lag | Up to 90 seconds after first event. Skill polls and falls back to chain-direct lookup |
-| Faucet rate limit | 3 AGNG/day per address. If a tester hits this, generate a fresh keypair via `peaqos init` |
-| KMS/hardware wallet | v1 hot keys only. Skill acknowledges this in Phase 5 (W3 branch) and offers a throwaway key |
+| Gas station unavailable on testnet | Expected — skill routes to faucet + `--skip-funding` |
+| MCR indexer lag | Up to 90s after first event. `peaqos show machine` for immediate chain-direct lookup |
+| Faucet rate limit | 3 AGNG/day per address |
+| Scale end-to-end (P2–P7) | Requires `PEAQOS_ORCHESTRATION_URL` — staging environment needed |
 
 ---
 
 ## Reporting issues
 
-Note the scenario number, the exact input that triggered the problem, and what the skill did vs what you expected. Check `peaqos.log` in the working directory for the CLI-level audit trail — it often contains the root cause.
+Note the playbook ID, the exact input that triggered the problem, and what the skill did vs what you expected. Check `peaqos.log` in the working directory for CLI-level audit trail.

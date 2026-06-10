@@ -1,192 +1,101 @@
-# peaqOS Concepts
+# peaqOS Technical Concepts
 
-Reference for explaining peaqOS-specific terms. Use the "plain English" versions
-when talking to non-technical operators; use the technical versions with developers.
-
----
-
-## peaqID / DID
-
-**Technical:** A W3C Decentralised Identifier in the format `did:peaq:0x<EVM-address>`.
-Written to the peaq DID precompile at `0x0000000000000000000000000000000000000800`.
-Six attributes are stored: machine ID, NFT token ID, operator DID, doc URL, data API URL, and visibility.
-
-**Plain English:** Your machine's permanent on-chain identity card. It's derived from the machine's
-wallet address, so it never changes even if the machine moves networks or operators.
+Definitions for terms used across playbooks and CLI output.
 
 ---
 
-## Machine NFT
+## Machine identifiers — critical distinction
 
-**Technical:** An ERC-721 token minted by `MachineNFT.mintNft(machineId, recipient)`.
-The NFT *owner* is the operator's address (not the machine's address in self-managed mode).
-Represents ownership and transferability of the machine's identity.
+Two separate ID spaces exist. Do not mix them.
 
-**Plain English:** A digital certificate of ownership. It proves who owns the machine,
-can be transferred to a new owner, and is required before DID attributes can be written.
-
----
-
-## Machine Credit Rating (MCR)
-
-**Technical:** A score (0–100) and tier label computed by the peaqOS MCR API from on-chain
-event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`.
-Updated periodically by an off-chain indexer — there's typically a short lag after new events.
-
-**Tiers:**
-| Score | Rating |
-|-------|--------|
-| ≥ 95  | AAA    |
-| ≥ 85  | AA     |
-| ≥ 75  | A      |
-| ≥ 65  | BBB    |
-| ≥ 55  | BB     |
-| ≥ 45  | B      |
-| ≥ 35  | CCC    |
-| ≥ 30  | CC     |
-| < 30  | NR (no rating) |
-| Fresh machine, no events yet | Provisioned |
-
-**Plain English:** Think of it as a credit score for your machine. Higher scores unlock better
-terms with DePIN service providers. A fresh machine starts as "Provisioned" — submit events to build history.
+| Identifier | Format | Source | Used by |
+|------------|--------|--------|---------|
+| On-chain machine ID | Positive integer (e.g. `42`) | `peaqos activate` stdout | `peaqos qualify event --machine-id` |
+| Machine DID | `did:peaq:0x<40-hex>` | `peaqos activate` stdout | `peaqos qualify mcr`, `peaqos show machine`, `peaqos scale machine onboard --identity-ref` |
+| Market machine ID | String (server-assigned, e.g. `mach_abc123`) | `peaqos scale machine onboard` stdout | All `peaqos scale` commands (`--machine-id` flag) |
 
 ---
 
-## Trust Level
+## MCR — Machine Credit Rating
 
-Controls how much weight an event carries in the MCR calculation.
+An on-chain credit score (0–100) computed from verified event history. Calculated by the MCR API from events submitted via `peaqos qualify event`. Ratings: `Provisioned` (no events yet) → `B` → `BB` → `BBB` → `A` → `AA` → `AAA`.
 
-| Value | CLI flag | Meaning | MCR weight |
-|-------|----------|---------|------------|
-| 0 | `--trust self` | Self-reported — you assert the data | Lowest |
-| 1 | `--trust onchain` | On-chain verifiable — backed by a source tx hash (`--source-tx` required) | Higher |
-| 2 | `--trust hardware` | Hardware-signed — cryptographic attestation from the device | Highest |
+**Indexer lag:** Up to 90s after an event lands on-chain before the MCR API reflects it. Use `peaqos show machine <did> --json` for chain-direct state.
 
-**Plain English:** Trust level is like a source citation. "I said so" (self) carries less weight
-than "here's the blockchain proof" (onchain) or "my tamper-proof chip signed this" (hardware).
+**FX Degraded:** If `fx_degraded: true` in MCR output, one or more events used a stale FX rate. Score is conservative but valid — no action required.
 
 ---
 
-## Bond Status
+## Trust levels
 
-**Technical:** Whether the machine has staked PEAQ on the `IdentityStaking` contract.
-The `activate` command handles bonding automatically as part of registration.
-Bond status is either `bonded` or `unbonded`.
-
-**Plain English:** A deposit that backs the machine's participation. Bonded machines
-are eligible for full MCR scoring. `peaqos activate` handles this automatically.
-
----
-
-## Data Visibility
-
-Set during `peaqos activate` via `--visibility`. Controls who can see the machine's data API.
+Applies to `peaqos qualify event --trust`.
 
 | Value | Meaning |
 |-------|---------|
-| `public` | Data API URL is visible to anyone querying the DID |
-| `private` | Data API URL is hidden; only the operator can see it |
-| `onchain` | Data is stored directly on-chain (for small payloads) |
-
-Default is `public`. Most operators want `public` unless data is commercially sensitive.
+| `self` (default) | Operator self-reports the event value |
+| `onchain` | Value is verifiable via a source chain transaction; requires `--source-tx` |
+| `hardware` | Value attested by hardware (TEE/HSM) |
 
 ---
 
-## Self-managed vs Proxy-managed
+## AgentPairing — token vs session fields
 
-**Self-managed (Architecture A):**
-The machine holds its own private key and signs all transactions itself.
-CLI invocation: `peaqos activate` (no extra flags).
-The machine's address and the operator's address are the same EOA.
+The `AgentPairing` dataclass (returned by `peaqos scale agent pair --json`) contains two distinct token-related fields. Do not confuse them:
 
-**Proxy-managed (Architecture B):**
-The operator holds the machine's private key and signs on its behalf.
-CLI invocation: `peaqos activate --for <machine-address> --machine-key <path>`.
-The operator funds, registers, and mints. The machine EOA still signs its own DID writes
-(the peaq DID precompile enforces `msg.sender == didAccount`).
-Operator must be registered first (run `peaqos activate` in self mode before proxy mode).
+| Field | Purpose | What to save |
+|-------|---------|-------------|
+| `pairing_token` | One-time auth token for agent pairing commands (`--pairing-token-file`) | **Save this** — it is what all Scale commands use |
+| `session_token_id` | Internal session identifier — not used in CLI commands | Ignore |
+| `session_id` / `session_issued_at` / `session_expires_at` | Session metadata | Reference only |
+
+The CLI does not expose a command to refresh `pairing_token` via the SDK's session-refresh endpoint. If the token is expired or lost, create a new pairing.
 
 ---
 
-## Event Types
+## Scale auth modes
 
-| Type | CLI flag | When to use |
-|------|----------|------------|
-| Revenue | `--type revenue` | Machine earned money (energy sold, service fee, data sold) |
-| Activity | `--type activity` | Machine did work (heartbeat, computation, task completed) |
+Scale commands use two distinct authentication mechanisms.
 
-`--value` is always in ISO 4217 subunits. Examples:
-- USD 1.23 → `--value 123 --currency USD`
-- HKD 10.00 → `--value 1000 --currency HKD`
-- JPY 100 → `--value 100 --currency JPY` (JPY has no minor unit)
-- Activity with no monetary value → `--value 0`
+| Auth type | Header | Commands |
+|-----------|--------|---------|
+| Platform auth | `x-api-key` (`PEAQOS_ORCH_API_KEY` if set) | machine CRUD, machine list/status, order list/status |
+| Agent pairing auth | `x-agent-pairing-token` | search, order place/execute, order received, order dispute |
 
----
+Commands using agent pairing auth always require `--pairing-token-file`. Commands using platform auth do not.
 
-## Machine Market (Scale)
-
-The Machine Market is a service marketplace where machines can buy and sell capabilities. It sits on top of peaqOS on-chain identity — a machine needs a peaqID before it can enter the Market.
-
-**Plain English:** Think of it as an app store for machine services. A machine can search for services it needs (price feeds, compute, storage), place orders, and pay for them — all autonomously.
+`PEAQOS_ORCH_API_KEY` is optional — only set it if commands return `AUTH_REQUIRED`.
 
 ---
 
-## Market Registration
+## OWS — Open Wallet Standard
 
-Registering a machine in the Market (`peaqos scale machine onboard`) is separate from on-chain activation (`peaqos activate`). On-chain activation creates the machine's permanent identity. Market registration lists the machine as a participant in the marketplace, with a display name, machine type, capabilities, and runtime profile.
+Encrypted key vault stored at `~/.ows/`. Requires `pip install 'peaq-os-sdk[ows]'`. Set `PEAQOS_OWS_WALLET=<name>` in `.env` to activate. Set `OWS_PASSPHRASE` in shell to avoid repeated prompts.
 
----
-
-## Agent Pairing
-
-An AI agent (like a Claude or LangChain instance) must be paired to a machine before it can search or order on its behalf. Pairing involves:
-1. The CLI requesting a challenge from the API
-2. The agent signing the challenge with its own key (EIP-191)
-3. The API verifying the signature and creating the pairing
-
-The result is a **pairing token** — a bearer credential that authorises the agent to act for that machine. The token is shown **once** and must be stored securely. It is passed to search and order commands via `--pairing-token-file`.
+OWS wallets auto-sign for: `peaqos activate`, `peaqos qualify event`, `peaqos scale machine onboard` (identity challenge, Mode 3), and EVM payment transfers in `peaqos scale order`. Auto-sign requires both `PEAQOS_OWS_WALLET` set and the vault passphrase resolved (from `OWS_PASSPHRASE` env var or an interactive prompt). Without the passphrase, the wallet is not considered active for signing.
 
 ---
 
-## Delegation Policy
+## Payment rails (Scale orders)
 
-When creating an agent pairing, operators can set a delegation policy that limits what the paired agent can do:
-- `--per-tx-limit`: max spend per single transaction
-- `--daily-limit`: max total spend per day
-- `--currency`: currency for the limits
-- `--allowed-skills` / `--denied-skills`: restrict which skill keys the agent can order
-- `--allowed-service-ids` / `--denied-service-ids`: restrict which specific services the agent can use
+The definitive payment determination happens **after order creation**, not at search time. The CLI checks the created order's `payment.default_rail == "not-required"` AND `payment.required == False` to decide between the 2-step and 5-step flows. The search quote's `.quotes[0].payment.required` is a pre-confirmation signal for the operator — useful for surfacing a payment warning before placing the order, but the created order's own payment block governs the actual code path.
 
-**Plain English:** Like a corporate credit card with spending controls — the agent can buy things, but only within the limits the operator set.
+**Full `MarketPaymentRailType` values:** `not-required` · `wallet` · `escrow` · `onchain-escrow` · `wdk-usdt-transfer` · `x402` · `xvv42` · `vault-stripe` · `offchain-record` · `external`
+
+`wallet` and `escrow` follow the same 5-step code path in `peaqos scale order`. Step 4 differs: `wallet` records a payment proof; `escrow` locks funds in an escrow contract. Solana transfers always require manual hash paste — OWS auto-pay is EVM-only.
 
 ---
 
-## Market Search and Quotes
+## Order and payment status values
 
-`peaqos scale search` queries the marketplace for services matching the machine's needs. The API returns a ranked list of **quotes** from available providers. Each quote has a `quote_id`, `service_id`, `score`, and `execution_mode`. The top-ranked quote is usually the best match; operators can inspect the full table and choose a different one.
+**`MarketOrderStatus`:** `created` · `payment_pending` · `ready` · `executing` · `delivered` · `confirmed` · `disputed` · `cancelled` · `failed` · `handoff`
 
----
+**`MarketPaymentStatus`:** `not_required` · `intent_created` · `held` · `release_pending` · `released` · `frozen` · `refunded`
 
-## Market Orders and Payment
-
-Placing an order (`peaqos scale order <service-id>`) commits to purchasing a service. Orders go through a lifecycle:
-- `pending` → `active` → `delivered` → `closed`
-
-**Payment rails:**
-- **Not required**: some services have no cost — order flows straight to execution
-- **Wallet payment (EVM)**: funds are transferred on-chain; the CLI creates a payment intent, sends the transfer, and submits a proof automatically (OWS wallets handle this without manual steps)
-- **Escrow**: funds are locked in a smart contract until the order is confirmed or disputed
-
-**Execution modes:**
-- **Native**: the service executes directly and returns a result in the API response (HTTP 200)
-- **Handoff**: the service returns a URL for external execution (HTTP 202) — the operator or agent completes the task via that endpoint
+Note: `pending` and `active` are **not** valid status values. Near-action payment states are `intent_created` (transfer not yet confirmed) and `held` (funds in transit/escrow).
 
 ---
 
-## Order Confirmation and Disputes
+## Execution modes
 
-After execution, the buyer confirms or disputes:
-- `peaqos scale order received`: confirms delivery, releases held payment to the provider
-- `peaqos scale order dispute --reason "..."`: flags a problem, freezes payment pending resolution
-
-**Plain English:** Like accepting or rejecting a delivery. Confirm if the service did what it promised; dispute if it didn't.
+`"native"` — service executes and returns a result in the response (HTTP 200).
+`"external-handoff"` — service returns a URL the agent should follow (HTTP 202). Note the hyphen — not underscore.

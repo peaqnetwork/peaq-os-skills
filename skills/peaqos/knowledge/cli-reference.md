@@ -20,6 +20,8 @@ pip install peaq-os-cli
 | `-v` / `--verbose` | Enable DEBUG logging to stderr |
 | `-q` / `--quiet` | Suppress progress output; only print errors |
 | `-h` / `--help` | Help for any command |
+| `--orchestration-url <url>` | Override `PEAQOS_ORCHESTRATION_URL` for this invocation |
+| `--orch-api-key <key>` | Override `PEAQOS_ORCH_API_KEY` for this invocation |
 
 ---
 
@@ -29,7 +31,7 @@ Interactive wizard that writes a `.env` file.
 
 ```bash
 peaqos init                    # interactive
-peaqos init --non-interactive  # read all values from existing env vars
+peaqos init --non-interactive  # read key + URLs + orchestration from env vars; contract addresses always from GitHub manifest
 peaqos init --force            # overwrite existing .env without prompting
 ```
 
@@ -39,9 +41,11 @@ peaqos init --force            # overwrite existing .env without prompting
 3. RPC URL (default shown per network)
 4. MCR API URL
 5. Gas Station URL
-6. Contract addresses (mainnet: fetched from GitHub; testnet: entered manually)
+6. Event Registry address (`EVENT_REGISTRY_ADDRESS`) — the only contract address prompted interactively
+7. Orchestration API URL (`PEAQOS_ORCHESTRATION_URL`) — for Scale / Machine Market commands
+8. Orchestration API key (`PEAQOS_ORCH_API_KEY`) — optional; leave blank if not required
 
-Finishes by running `peaqos whoami` to verify the config loaded correctly.
+Finishes by invoking `peaqos whoami` to verify config — if whoami fails the error is printed to stderr but does not affect `init`'s exit code.
 
 **Private key source options:**
 - `paste` — enter an existing raw private key; written as `PEAQOS_PRIVATE_KEY` in `.env`
@@ -49,8 +53,7 @@ Finishes by running `peaqos whoami` to verify the config loaded correctly.
 - `wallet` — creates an OWS encrypted vault wallet (requires `pip install "peaq-os-sdk[ows]"`); writes `PEAQOS_OWS_WALLET=<name>` to `.env` instead of a raw key
 
 **Notes:**
-- Mainnet contract addresses are fetched automatically from the peaq GitHub repo.
-- Testnet (agung) addresses must be entered manually — use values from `examples/.env.example`.
+- At startup, `init` silently fetches contract addresses from GitHub (`peaqos.json`). On mainnet, all five contract addresses are populated automatically. On testnet, the fetch returns empty strings for most addresses — only `EVENT_REGISTRY_ADDRESS` is prompted interactively. The remaining testnet addresses must be corrected manually in `.env` after init — use values from `examples/.env.example` and `GUIDE.md`.
 - Gas Station is not available on agung testnet — leave blank and use `--skip-funding`.
 
 ---
@@ -63,7 +66,7 @@ Print the active wallet address, network, chain ID, and all contract addresses.
 peaqos whoami
 ```
 
-Output:
+Output (example shown for testnet/agung — mainnet shows Chain ID: 3338):
 ```
   Address :  0xAbCd...1234
   Network :  testnet
@@ -122,7 +125,7 @@ peaqos activate --for 0xMachineAddress --machine-key ./machine.key --skip-fundin
 | 3 | Gas station funding | Calls gas station with TOTP to fund insufficient wallets. |
 | 4 | Register machine | Calls `IdentityRegistry.registerMachine()` or `registerFor(machineAddress)`. Returns machine ID. |
 | 5 | Mint NFT | Calls `MachineNFT.mintNft(machineId, recipient)`. Returns token ID. |
-| 6 | Write DID attributes | Writes 6 machine DID attributes. In proxy mode, machine key signs this step. |
+| 6 | Write DID attributes | Writes machine DID attributes signed by the machine key. In proxy mode, also writes operator DID attributes signed by the operator key. Attribute counts are SDK-version dependent. |
 
 **Idempotent:** Re-running `activate` against an already-activated machine is safe — each step
 checks on-chain state and skips if already complete. Exit 0 with no transactions submitted.
@@ -344,7 +347,7 @@ peaqos show operator machines did:peaq:0x<40-hex>
 peaqos show operator machines did:peaq:0x<40-hex> --json
 ```
 
-Output: tabular list of `peaqID`, `Machine ID`, `MCR score`, `Rating`.
+Output: tabular list of `peaqID`, `Machine ID`, `MCR`, `Rating`.
 
 ---
 
@@ -514,6 +517,8 @@ Returns a ranked table of quotes. Output includes `search_id` and per-quote `quo
 
 Place a market order for a service. `<service-id>` is the UUID from a search result.
 
+> **Dynamic dispatch:** The `order` command group intercepts any token that is not a registered subcommand (`status`, `list`, `received`, `dispute`) and treats it as a service UUID. Pass the service UUID as a positional argument directly after `order` — it is not a `--flag`.
+
 ```bash
 peaqos scale order <service-id> \
   --machine-id <id> \
@@ -574,6 +579,7 @@ Confirm delivery of a market order. Releases held payment to the provider.
 
 ```bash
 peaqos scale order received <order-id> --pairing-token-file ./pairing.token
+peaqos scale order received <order-id> --pairing-token-file ./pairing.token --json
 ```
 
 ---
@@ -596,8 +602,8 @@ All commands read from `.env` in the working directory (loaded automatically) or
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `PEAQOS_PRIVATE_KEY` | Yes (write commands, if not using OWS) | Operator private key (0x-prefixed hex) |
-| `PEAQOS_OWS_WALLET` | Yes (write commands, if not using raw key) | OWS wallet name — alternative to `PEAQOS_PRIVATE_KEY` |
+| `PEAQOS_PRIVATE_KEY` | Yes (all commands that load the client, if not using OWS) | Operator private key (0x-prefixed hex). Required for read-only commands too (e.g. `whoami`, `qualify mcr`) — the client always resolves a signing key. |
+| `PEAQOS_OWS_WALLET` | Yes (all commands, if not using raw key) | OWS wallet name — alternative to `PEAQOS_PRIVATE_KEY` |
 | `OWS_PASSPHRASE` | No | Vault passphrase for OWS wallets; prompted interactively if absent |
 | `PEAQOS_NETWORK` | Yes | `mainnet` or `testnet` |
 | `PEAQOS_RPC_URL` | No | Override RPC endpoint |

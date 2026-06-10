@@ -86,7 +86,7 @@ If it persists, the machine may need manual bonding (contact peaq team).
 
 **Symptom:** Step 6 fails with `Failed to read DID attribute on 0x...: Web3RPCError`
 **Cause:** Known RPC quirk with the DID precompile at `0x0000000000000000000000000000000000000800` on agung testnet. Steps 4 (register) and 5 (mint NFT) are unaffected.
-**Fix:** This is non-blocking — the machine is registered and bonded on-chain. Re-run `peaqos activate` once (idempotent; skips completed steps) to retry the DID write. If it continues to fail, proceed without DID attributes for now. Note that `peaqos show machine` may return "not found" as a downstream consequence (see below).
+**Fix:** This is non-blocking — the machine is registered and bonded on-chain. Re-run `peaqos activate` once (idempotent; skips completed steps) to retry the DID write. If it continues to fail, you can still derive the Machine DID as `did:peaq:<machine-or-operator-address>` — this does not depend on DID attributes. P2 onboarding (`scale machine onboard`) will still work with this DID. Note that `peaqos show machine` lookups may return "not found" as a downstream consequence (see below).
 
 **Symptom:** `peaqos show machine` returns "Machine not found" for a machine that exists on-chain
 **Cause:** The `show machine` command depends on DID attributes being written (step 6). If step 6 failed, the lookup has nothing to resolve even though the machine is registered.
@@ -132,11 +132,11 @@ event_reg.functions.submitEvent(...).transact({'from': account.address})
 ```
 Compare the exact transaction calldata between the CLI and SDK calls to isolate the root cause.
 
-**Symptom:** Exit 2 — `RateLimitExceeded`
+**Symptom:** Exit 1 — `RateLimitExceeded`
 **Cause:** Too many events submitted within the configured time window.
 **Fix:** Wait for the rate limit window to reset, or adjust operational limits.
 
-**Symptom:** Exit 2 — `ValueCapExceeded`
+**Symptom:** Exit 1 — `ValueCapExceeded`
 **Cause:** Event value exceeds configured per-tx cap.
 **Fix:** Check your SDK or CLI configuration for `--max-value-per-tx`.
 
@@ -156,8 +156,7 @@ Retry `qualify mcr` after a few minutes.
 
 **Symptom:** MCR score is 0 or `Provisioned` after submitting events
 **Cause:** Indexer lag — events take up to 90s to be reflected in the MCR API.
-**Fix:** Poll `peaqos qualify mcr <did>` every 10s for up to 2 minutes.
-If still 0 after 2 minutes, use `peaqos show machine <did>` to confirm events landed on chain.
+**Fix:** Poll `peaqos qualify mcr <did> --json` every 15s for up to 90s. Check the `mcr` field; terminate when it is any value other than `Provisioned`. If still `Provisioned` after 90s, use `peaqos show machine <did> --json` to confirm events landed on chain.
 
 **Symptom:** `FX Degraded: yes` in MCR output
 **Cause:** One or more events used a degraded FX source (stale or outage).
@@ -201,7 +200,7 @@ Check `peaqos.log` to see which steps completed.
 
 ## Phase: Scale — Machine Onboard (exit 1 or 2)
 
-**Symptom:** Exit 1 — `Signer <address> is not a DID controller for this identity`
+**Symptom:** Exit 2 — `Signer <address> is not a DID controller for this identity`
 **Cause:** The key used to sign the identity challenge does not match any controller address registered for the DID.
 **Fix:** Use `--identity-key-file` with the correct DID controller key, not a machine key or a different operator key. Verify the DID's controller addresses with `peaqos show machine <did>`.
 
@@ -209,9 +208,9 @@ Check `peaqos.log` to see which steps completed.
 **Cause:** Both signing flags were passed.
 **Fix:** Use one or the other — `--identity-key-file` for automatic signing, `--identity-signature-file` for a pre-computed signature.
 
-**Symptom:** Exit 2 — `identity already exists` / `IDENTITY_CONFLICT`
+**Symptom:** Exit 2 — `identity already exists` / `MACHINE_IDENTITY_EXISTS`
 **Cause:** The machine has already been registered in the Market.
-**Fix:** Run `peaqos scale machine status <machine-id>` to check the existing registration. If status is `draft`, update rather than re-onboard.
+**Fix:** Run `peaqos scale machine status <machine-id>` to check the existing registration. If status is `draft`, the machine was registered but not activated — there is no CLI command to activate a draft machine directly. Contact your platform admin or the peaqOS team to activate it, or re-register with a different `--identity-ref`.
 
 ---
 
@@ -221,20 +220,17 @@ Check `peaqos.log` to see which steps completed.
 **Cause:** `--json` flag used without providing a pre-signed signature file.
 **Fix:** Either remove `--json` (interactive mode will prompt for the signature), or pass `--agent-signature-file ./agent.sig`.
 
-**Symptom:** Exit 2 — `PAIRING_PROOF_INVALID`
+**Symptom:** Exit 2 — `AGENT_PAIRING_PROOF_INVALID`
 **Cause:** The EIP-191 signature provided by the agent does not match the challenge message.
 **Fix:** Ensure the agent signed the exact challenge message string (including whitespace). The message is displayed during the pairing flow — relay it to the agent exactly as shown.
 
 **Symptom:** Pairing token lost / not saved
 **Cause:** The token was displayed once and the window was closed or cleared.
-**Fix:** The token cannot be recovered. Revoke the existing pairing and create a new one:
+**Fix:** The token cannot be recovered. Create a new pairing directly:
 ```bash
-# List pairings to find the pairing ID
-peaqos scale machine list
-
-# Create a fresh pairing
-peaqos scale agent pair --machine-id <id> ...
+peaqos scale agent pair --machine-id <id> --agent-address <addr> --agent-provider <provider> --agent-role <role> --yes
 ```
+Note: `peaqos scale machine list` lists machines, not pairings — it cannot be used to look up a pairing ID. If you need to identify existing pairings, contact the platform team or check your own records from when P3 was originally run.
 
 ---
 
@@ -244,12 +240,13 @@ peaqos scale agent pair --machine-id <id> ...
 **Cause:** `--provider-credentials` path does not exist or is not readable.
 **Fix:** Check the file path. Credentials file must be a valid JSON object.
 
-**Symptom:** Exit 2 — `AGENT_AUTH_REQUIRED` / `pairing token invalid`
+**Symptom:** Exit 2 — `AGENT_AUTH_REQUIRED` / `AGENT_AUTH_EXPIRED` / pairing token invalid
 **Cause:** The pairing token in `--pairing-token-file` is expired, revoked, or for a different machine.
-**Fix:** Verify the token file contains the correct token for this machine. If expired, create a new agent pairing session:
+**Fix:** The CLI does not expose a token-refresh command. The SDK has a `CreateAgentPairingSessionRequest` type for refreshing a token against an existing pairing, but no `peaqos scale` subcommand wraps it. The only CLI path is to create a new pairing:
 ```bash
-peaqos scale agent pair --machine-id <id> ...
+peaqos scale agent pair --machine-id <id> --agent-address <addr> --agent-provider <provider> --agent-role <role> --yes
 ```
+This creates a new pairing with a new ID and pairing token. Update any stored `pairing_id` and token file with the new values.
 
 **Symptom:** No quotes returned despite valid search
 **Cause:** No providers match the service type, capabilities, or budget.
@@ -267,10 +264,10 @@ peaqos scale agent pair --machine-id <id> ...
 **Cause:** The payment transaction was submitted but could not be verified on-chain (RPC lag or wrong chain).
 **Fix:** Check `PEAQOS_RPC_URL` is correct and reachable. If the tx was mined, use `--payment-tx-hash` + `--payment-chain` + `--payment-token` + `--skip-payment` to submit proof manually.
 
-**Symptom:** Order created but execution failed — status stuck at `active`
+**Symptom:** Order created but execution failed — status stuck at `ready` or `executing`
 **Cause:** The order was created and paid for but the execute step failed.
-**Fix:** Check `peaqos scale order status <order-id>`. If the order is still active, execution can be retried. If the service is unavailable, dispute the order.
+**Fix:** Check `peaqos scale order status <order-id> --json`. If `.order.status` is `ready` or `executing`, execution can be retried with the same `peaqos scale order <service-id>` command. If the service is unavailable, dispute the order.
 
 **Symptom:** Exit 2 — `ORDER_CLOSED`
 **Cause:** Attempted to execute, confirm, or dispute an order that is already in a terminal state.
-**Fix:** Check the current status with `peaqos scale order status <order-id>`. Terminal states: `closed`, `cancelled`, `disputed`.
+**Fix:** Check the current status with `peaqos scale order status <order-id> --json`. Terminal states: `confirmed` · `cancelled` · `disputed` · `failed`.
