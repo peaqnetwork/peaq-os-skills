@@ -38,6 +38,7 @@ Ask once: **"What would you like to do?"**
 | Submit machine events | P5 |
 | Query machine or fleet status | P6 |
 | Manage existing orders | P7 |
+| Stream data (publish, grant, consume) | P8 |
 
 Route directly to the selected playbook. Do not ask follow-up questions until the playbook's input collection step.
 
@@ -641,6 +642,39 @@ From `--json` output:
 
 If `.status` is `"no_match"` or `.quotes` is empty: stop and report. Suggest: remove `--native-only`, add `--allow-handoff`, increase budget, or use a different `--service-type` value.
 
+**Step 1.5 — Fetch operation contract and build `--input` file**
+
+Before placing the order, fetch the service's `OperationContract` to get the exact input fields and a working example. The CLI's interactive example-input tip is skipped under `--json`/`--yes`, so this step is always required.
+
+```python
+# Save as /tmp/fetch_contract.py
+import json, os
+from peaq_os_sdk import PeaqOSClient
+from peaq_os_sdk.types.orchestration.market_service import GetMarketServiceOptions
+
+client = PeaqOSClient()
+result = client.orchestration.get_market_service(
+    os.environ["SERVICE_ID"],
+    GetMarketServiceOptions(machine_id=os.environ.get("MACHINE_ID"))
+)
+for c in result.item.operation_contracts:
+    if c.operation == os.environ.get("OPERATION", c.operation):
+        print(f"Operation: {c.operation}")
+        if c.summary: print(f"Summary: {c.summary}")
+        for n in c.notes: print(f"Note: {n}")
+        print("\nInput fields:")
+        for f in c.input_fields:
+            desc = f" — {f.description}" if f.description else ""
+            print(f"  {f.key} ({f.type}){desc}")
+        print("\nExample input:")
+        print(json.dumps(c.example_input, indent=2))
+        if not os.environ.get("OPERATION"): print("---")
+```
+
+Run as: `set -a && source .env && set +a && SERVICE_ID=<id> MACHINE_ID=<mach_id> OPERATION=<op> python3 /tmp/fetch_contract.py`
+
+Show the operator the input fields and `example_input`. Collect their values and write to `/tmp/order_input.json`, then pass as `--input /tmp/order_input.json`.
+
 **Step 2 — Confirm and place order**
 
 Show operator the lead quote: `service_id`, `skill_key`, `provider_key`, `execution_mode`, and whether payment is required (`.quotes[0].payment.required`). ⚠️ *Requires operator confirmation if `.quotes[0].payment.required` is `true`.*
@@ -653,7 +687,7 @@ peaqos scale order <service-id> \
   --search-id <search-id> \
   --quote-id <quote-id> \
   [--operation <op>] \
-  [--input <path>] \
+  [--input /tmp/order_input.json] \
   [--provider-credentials <path>] \
   --yes \
   --json
@@ -661,12 +695,12 @@ peaqos scale order <service-id> \
 
 > Note: `<service-id>` is a positional argument, not a flag. The CLI treats any token that is not a registered subcommand (`status`, `list`, `received`, `dispute`) as a service UUID.
 
-Payment handling (determined from the created order's payment block — not the search quote):
-- Payment not required (`order.payment.default_rail == "not-required"` AND `order.payment.required == false`) → 2-step: create → execute. No payment interaction.
-- Payment required → 5-step: create → payment intent → transfer → proof/escrow-lock → execute. OWS wallet (`PEAQOS_OWS_WALLET`) handles EVM transfers automatically. **When manual payment is required**, the CLI prints payment details (amount, chain, token, payee address) and blocks waiting for a tx hash — surface this to the operator and wait for them to complete the transfer. Solana always requires manual paste.
-- Pre-completed → add `--payment-tx-hash <hash> --payment-chain <chain> --payment-token <token> --skip-payment`
+**Payment handling** (determined from `order.payment.default_rail` after order creation, not the search quote):
 
-Note: The search quote's `.quotes[0].payment.required` is a useful pre-confirmation signal to show the operator, but the actual payment code path is determined after order creation.
+- **`not-required`** → 2 steps: create → execute. No payment interaction.
+- **`x402`** → 6 steps, fully automatic. CLI signs EIP-3009 `TransferWithAuthorization` locally (offline), records proof, executes, auto-confirms delivery. USDC debited at execution. **Skip Step 3 (confirm/dispute) entirely — x402 auto-confirms.** On partial failure check `.step`: `"x402 payment challenge"` → bad challenge from provider; `"x402 signing"` → check `PEAQOS_PRIVATE_KEY`.
+- **`wallet` / `escrow`** → 5 steps: create → intent → transfer → proof/escrow-lock → execute. OWS wallet handles EVM transfers automatically. Solana always requires manual tx hash paste.
+- **Pre-completed** → add `--payment-tx-hash <hash> --payment-chain <chain> --payment-token <token> --skip-payment`.
 
 From `--json` output, capture `.order.id` as `order_id`. **On partial failure** (order created but later step failed), the error message includes the order ID. Run `peaqos scale order status <id> --json` and branch:
 - Error code `QUOTE_EXPIRED` → order is unresumable; run a new search
@@ -675,7 +709,7 @@ From `--json` output, capture `.order.id` as `order_id`. **On partial failure** 
 
 Valid `MarketOrderStatus` values: `created` · `payment_pending` · `ready` · `executing` · `delivered` · `confirmed` · `disputed` · `cancelled` · `failed` · `handoff`
 
-**Step 3 — Confirm or dispute**
+**Step 3 — Confirm or dispute** *(skip for x402 orders — auto-confirmed)*
 
 `AskUserQuestion`: "Was the service delivered as expected?"
 - `Yes — confirm delivery` → runs `order received`
@@ -937,6 +971,371 @@ peaqos scale order dispute <order-id> \
   --yes \
   --json
 ```
+
+---
+
+## P8 — Stream data (publish, grant, consume)
+
+Encrypted data streaming pipeline. Chunks, encrypts, and signs a data file for secure distribution; grants per-buyer decryption access; decrypts and reassembles on the buyer side. No Scale dependency — works on any machine with an active `.env`.
+
+Prerequisite: P1 complete (machine DID required for publish). This playbook has three independent sub-actions that may be run by different parties.
+
+### Preflight
+
+- Base config check
+- Confirm `cryptography` library is available (installed with `peaq-os-cli`):
+
+```bash
+python3 -c "from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey; print('OK')" 2>/dev/null || echo "MISSING"
+```
+
+`MISSING` → install: `pip install cryptography --break-system-packages`
+
+### Sub-actions
+
+`AskUserQuestion`: "What would you like to do?"
+- `A — Publish data` — Chunk, encrypt, and sign a data file for distribution
+- `B — Grant buyer access` — Re-wrap keys for a specific buyer
+- `C — Consume data` — Decrypt and reassemble a purchased stream
+- `D — Send stream payment` — Transfer tokens to a seller for a stream order
+- `E — Retry payment proof` — Re-submit a proof when confirmation failed
+- `F — Distribute data (seller)` — Poll for payment then deliver chunks to S3
+
+---
+
+**A — Publish data stream**
+
+Chunks and encrypts a data file. Outputs per-chunk envelope files (`.json`), encrypted data blobs (`.bin`), and a `manifest.json` to a local directory.
+
+**Step 1 — Key setup**
+
+Stream publish requires three X25519 public keys (owner, operator, machine) and one Ed25519 signing key file. These are separate from `PEAQOS_PRIVATE_KEY` — they exist only for stream encryption and signing.
+
+`AskUserQuestion`: "Do you have X25519 stream keypairs for this machine?" → `Yes, I have them already` / `No, generate them now`
+
+If generating — run the script below. All private keys are written to files and never printed in chat.
+
+```bash
+python3 - << 'PYEOF'
+import os, stat, sys
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+out = sys.argv[1] if len(sys.argv) > 1 else "."
+os.makedirs(out, exist_ok=True)
+
+def save(path, priv_hex, pub_hex, label):
+    with open(path, "w") as f:
+        f.write(priv_hex + "\n")
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    print(f"{label}_public_key={pub_hex}")
+    print(f"{label}_key_file={path}")
+
+owner = X25519PrivateKey.generate()
+save(f"{out}/stream-owner.key",    owner.private_bytes_raw().hex(),    owner.public_key().public_bytes_raw().hex(),    "owner")
+
+operator = X25519PrivateKey.generate()
+save(f"{out}/stream-operator.key", operator.private_bytes_raw().hex(), operator.public_key().public_bytes_raw().hex(), "operator")
+
+machine = X25519PrivateKey.generate()
+save(f"{out}/stream-machine.key",  machine.private_bytes_raw().hex(),  machine.public_key().public_bytes_raw().hex(),  "machine")
+
+signing = Ed25519PrivateKey.generate()
+save(f"{out}/stream-signing.key",  signing.private_bytes_raw().hex(),  signing.public_key().public_bytes_raw().hex(),  "signing")
+
+print("---")
+print("WARNING: Back up all .key files. They cannot be recovered.")
+PYEOF
+```
+
+Run as: `python3 <script> <output-dir>` (default: current directory).
+
+Parse the output — surface the four `*_public_key=` values to the operator. Tell them:
+> "Your stream keypairs have been generated. **Back up all `.key` files now** — if lost, data encrypted with these keys cannot be decrypted. You will need the `owner_public_key`, `operator_public_key`, and `machine_public_key` values to run publish."
+
+If the operator already has keys, ask for:
+- Owner X25519 public key (hex) — free text
+- Operator X25519 public key (hex) — free text
+- Machine X25519 public key (hex) — free text
+- Signing key file path — free text (path to Ed25519 private key hex file)
+
+**Step 2 — Collect publish inputs**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--input` | Yes | File path or URL to the source data |
+| `--output-dir` | Yes | Directory for chunk files + manifest (created if missing) |
+| `--machine-did` | Yes | From P1 / `peaqos whoami` (e.g. `did:peaq:0x...`) |
+| `--machine-key-id` | Yes | DID key reference — typically `<machine-did>#keys-1` |
+| `--chunk-size` | No | Bytes per chunk (default 262144 = 256 KB) |
+| `--s3` | No | S3 bucket path (e.g. `s3://my-bucket/prefix/`) for remote upload |
+| `--s3-region` | No | S3-compatible region |
+| `--s3-endpoint` | No | Custom S3 endpoint (MinIO, R2, etc.) |
+
+Note: `--machine-key-id` is embedded in chunk metadata for attribution. Use `<machine-did>#keys-1` unless the operator has a different DID key reference.
+
+**Step 3 — Execute**
+
+```bash
+peaqos stream publish \
+  --input <file-or-url> \
+  --output-dir <output-dir> \
+  --owner-public-key <owner-pub-hex> \
+  --operator-public-key <operator-pub-hex> \
+  --machine-public-key <machine-pub-hex> \
+  --signing-key-file <path-to-stream-signing.key> \
+  --machine-did <machine-did> \
+  --machine-key-id <machine-key-id> \
+  [--chunk-size <bytes>] \
+  [--s3 <s3-path> [--s3-region <region>] [--s3-endpoint <endpoint>]] \
+  --json
+```
+
+Parse from `--json` output:
+- `.sourceHash` → `source_hash`
+- `.totalChunks` → chunk count
+- `.machineDid` → confirms DID is embedded
+
+If exit 1 with `"must be N bytes"` → a public key hex was wrong length (X25519 must be exactly 64 hex chars / 32 bytes).
+If exit 1 with `"not valid hex"` → a key string contains non-hex characters.
+If the `--input` is a URL and exits with a download error → verify the URL is reachable and returns a binary file.
+
+### Sub-action A outputs
+
+| Name | Description | Used in |
+|------|-------------|---------|
+| `source_hash` | SHA-256 hash of original data | C (buyer verification) |
+| `total_chunks` | Number of chunks produced | Reference |
+| `chunk_dir` | Directory with `chunk-*.json` and `chunk-*.bin` | B, C |
+| `owner_key_file` | Path to `stream-owner.key` | B (grant step) |
+| `owner_public_key_hex` | Owner's X25519 public key | Reference |
+
+---
+
+**B — Grant buyer access**
+
+Re-wraps per-chunk encryption keys for a specific buyer using the owner's private key. The buyer can then decrypt the data without the owner ever sharing their private key.
+
+Prerequisite: Sub-action A complete.
+
+**Collect inputs:**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--chunk-dir` | Yes | Directory from A (contains `chunk-*.json`) |
+| `--buyer-public-key` | Yes | Buyer's X25519 public key hex (64 chars) — ask free text |
+| `--buyer-id` | Yes | Buyer's DID or identifier (e.g. `did:peaq:0x...`) — ask free text |
+| `--owner-private-key-file` | Yes | Path to `stream-owner.key` from Sub-action A |
+| `--output-dir` | Yes | Directory for buyer access files (created if missing) |
+| `--max-file-size` | No | Max bytes per access file (default 512000 = 500 KB) |
+
+**Execute:**
+
+```bash
+peaqos stream grant \
+  --chunk-dir <chunk-dir> \
+  --buyer-public-key <buyer-pub-hex> \
+  --buyer-id <buyer-id> \
+  --owner-private-key-file <stream-owner.key> \
+  --output-dir <access-dir> \
+  [--max-file-size <bytes>] \
+  --json
+```
+
+If exit 2 with `"Key commitment verification failed"` → the owner private key in `--owner-private-key-file` does not match the public key used to publish. Verify the correct `stream-owner.key` is being used.
+
+After grant completes, tell the operator what the buyer needs to receive:
+1. Buyer access files: all `*.json` from `<access-dir>`
+2. Chunk envelope files: all `chunk-*.json` from `<chunk-dir>`
+3. Encrypted data blobs: all `chunk-*.bin` from `<chunk-dir>`
+
+### Sub-action B outputs
+
+| Name | JSON path | Description |
+|------|-----------|-------------|
+| `access_dir` | — | Directory containing buyer access files |
+| `file_count` | `.fileCount` | Number of access files written |
+| `chunk_count` | `.chunkCount` | Chunks covered |
+
+---
+
+**C — Consume data stream**
+
+Decrypts and reassembles a purchased stream. Run by the buyer using their private key and the files shared by the publisher after a grant.
+
+**Collect inputs:**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--chunk-dir` | Yes | Directory with `chunk-*.json` envelopes from publish |
+| `--access-dir` | Yes | Directory with buyer access `*.json` files from grant |
+| `--data-dir` | Yes | Directory with encrypted `chunk-*.bin` blobs — often same as `--chunk-dir` |
+| `--buyer-private-key-file` | Yes | Path to buyer's X25519 private key file — ask free text |
+| `--buyer-id` | Yes | Must exactly match the buyer ID used in grant |
+| `--output` | Yes | Output file path for reassembled data |
+| `--skip-verify` | No | Skip chain integrity check (debugging only) |
+
+**Execute:**
+
+```bash
+peaqos stream consume \
+  --chunk-dir <chunk-dir> \
+  --access-dir <access-dir> \
+  --data-dir <data-dir> \
+  --buyer-private-key-file <buyer-priv-key-file> \
+  --buyer-id <buyer-id> \
+  --output <output-path> \
+  --json
+```
+
+After success, surface `.sourceHash` and ask the operator to verify it against the `source_hash` published by the data owner — this confirms the data is intact and unmodified.
+
+Error handling:
+
+| Error message | Cause | Fix |
+|---------------|-------|-----|
+| `"Key commitment verification failed"` | Buyer private key doesn't match the public key used in grant | Verify the correct buyer key file |
+| `"access not granted for this buyer private key"` | Access files don't include an entry for this buyer | Re-run grant with the correct buyer public key |
+| `"Chain verification failed at chunk N: ..."` | Data integrity failure | Chunk data may be corrupted — re-download from source |
+| `"No buyer access for chunk N"` | Access files are incomplete | Re-run grant — some chunks were missed |
+| `"Missing encrypted data for chunk N"` | `.bin` file missing from `--data-dir` | Verify all `chunk-*.bin` files are present |
+| `"Buyer ID mismatch"` | `--buyer-id` doesn't match the ID in access files | Use the exact string that was passed to grant |
+
+### Sub-action C outputs
+
+| Name | JSON path | Description |
+|------|-----------|-------------|
+| `output_file` | `.output` | Path to reassembled data |
+| `total_bytes` | `.totalBytes` | Byte count — verify matches original |
+| `source_hash` | `.sourceHash` | SHA-256 — verify against publisher's hash |
+| `verified` | `.verified` | `true` if chain integrity check passed |
+
+---
+
+**D — Send stream payment**
+
+Transfer tokens to the seller as payment for a stream order. The operator's secp256k1 key is used (falls back to `PEAQOS_PRIVATE_KEY` if no key file given).
+
+**Collect inputs:**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--seller-address` | Yes | Seller's EVM address — ask free text |
+| `--amount` | Yes | Token subunits — clarify decimals (USDC: 6dp → 1 USDC = `1000000`) |
+| `--chain` | Yes | `AskUserQuestion`: `peaq` / `base` / `solana` |
+| `--order-id` | Yes | Order ID — ask free text |
+| `--token-address` | No | ERC-20 contract if not native token |
+| `--confirmation-url` | No | Provided by seller |
+| `--private-key-file` | No | Path to key file; falls back to `PEAQOS_PRIVATE_KEY` |
+
+**Execute:**
+
+```bash
+peaqos stream pay \
+  --seller-address <addr> \
+  --amount <n> \
+  --chain <chain> \
+  --order-id <id> \
+  [--token-address <addr>] \
+  [--confirmation-url <url>] \
+  [--private-key-file <path>] \
+  --json
+```
+
+**Security:** If the operator offers to paste a key value, redirect: "Set `PEAQOS_PRIVATE_KEY` in `.env` or write the key to a file and pass the path with `--private-key-file`."
+
+### Sub-action D outputs
+
+| Name | JSON path | Description |
+|------|-----------|-------------|
+| `tx_hash` | `.txHash` | On-chain payment transaction hash — needed for E if proof retry required |
+
+---
+
+**E — Retry payment proof**
+
+Use when payment was confirmed on-chain but the seller's confirmation endpoint never received it.
+
+**Collect inputs:**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--tx-hash` | Yes | From Sub-action D output — ask free text |
+| `--order-id` | Yes | Same order ID as D — ask free text |
+| `--chain` | Yes | `AskUserQuestion`: `peaq` / `base` / `solana` |
+| `--payer-address` | Yes | Buyer's address — read from `peaqos whoami` |
+| `--payee-address` | Yes | Seller's address — same as `--seller-address` from D |
+| `--amount` | Yes | Must exactly match the original payment amount |
+| `--token` | No | Token symbol (e.g. `USDC`) |
+| `--token-address` | No | ERC-20 contract address |
+| `--confirmation-url` | No | Seller confirmation endpoint |
+
+**Execute:**
+
+```bash
+peaqos stream payproof \
+  --tx-hash <hash> \
+  --order-id <id> \
+  --chain <chain> \
+  --payer-address <addr> \
+  --payee-address <addr> \
+  --amount <n> \
+  [--token <symbol>] \
+  [--token-address <addr>] \
+  [--confirmation-url <url>] \
+  --json
+```
+
+All values must match the original transaction exactly — mismatches cause proof rejection.
+
+---
+
+**F — Distribute stream data (seller side)**
+
+Poll for buyer payment confirmation then upload encrypted chunks to S3. The stream owner private key (X25519, from Sub-action A) is required — not `PEAQOS_PRIVATE_KEY`.
+
+**Collect inputs:**
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `--chunk-dir` | Yes | Directory with `chunk-*.json` and `chunk-*.bin` from Sub-action A — ask free text |
+| `--owner-private-key-file` | Yes | Path to `stream-owner.key` from Sub-action A — ask free text |
+| `--confirmation-url` | Yes | Seller payment confirmation endpoint — ask free text |
+| `--order-id` | Yes | Order ID — ask free text |
+| `--s3` | Yes | S3 destination URI e.g. `s3://bucket/prefix` — ask free text |
+| `--s3-region` | No | AWS region |
+| `--s3-endpoint` | No | Custom S3-compatible endpoint (MinIO, R2, etc.) |
+| `--poll-interval` | No | Seconds between polls (default: 30) |
+| `--timeout` | No | Max poll wait in seconds (default: 3600) |
+| `--presign-expiry` | No | Pre-signed URL expiry in seconds (default: 3600) |
+| `--max-file-size` | No | Skip chunks larger than this byte count |
+
+**Execute:**
+
+```bash
+peaqos stream distribute \
+  --chunk-dir <path> \
+  --owner-private-key-file <stream-owner.key> \
+  --confirmation-url <url> \
+  --order-id <id> \
+  --delivery s3 \
+  --s3 <s3-uri> \
+  [--s3-region <region>] \
+  [--s3-endpoint <endpoint>] \
+  [--poll-interval <s>] \
+  [--timeout <s>] \
+  [--presign-expiry <s>] \
+  [--json]
+```
+
+The command polls until payment is confirmed, then uploads chunks. If it times out, it is safe to retry — the upload is idempotent. If AWS credentials are not set, remind the operator to set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in their environment.
+
+### Sub-action F outputs
+
+| Name | JSON path | Description |
+|------|-----------|-------------|
+| `uploaded_count` | `.uploadedCount` | Number of chunks delivered |
+| `presigned_urls` | `.presignedUrls` | URLs to share with the buyer for download |
 
 ---
 

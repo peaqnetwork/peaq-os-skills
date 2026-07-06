@@ -541,10 +541,27 @@ peaqos scale order <service-id> \
 | `--payment-token` | Token for payment proof (required with `--payment-tx-hash`) |
 | `--skip-payment` | Skip payment step (requires `--payment-tx-hash`) |
 
-**Payment flows:**
-- **No payment required**: 2-step create → execute
-- **Wallet payment (EVM)**: 5-step create → intent → send → proof/escrow → execute. OWS wallets handle EVM transfers automatically.
-- **Pre-completed**: pass `--payment-tx-hash` + `--payment-chain` + `--payment-token` with `--skip-payment`
+**Payment flows (determined from `order.payment.default_rail` after order creation):**
+
+| Rail | Steps | Behaviour |
+|------|-------|-----------|
+| `not-required` | 2 | create → execute. No payment interaction. |
+| `wallet` / `escrow` | 5 | create → intent → transfer → proof/lock → execute. OWS handles EVM automatically; Solana requires manual tx hash. |
+| `x402` | 6 | Fully automatic. CLI signs EIP-3009 `TransferWithAuthorization` locally (offline), records proof, executes, auto-confirms. USDC debited at execution. **No confirm/dispute prompt.** |
+| Pre-completed | any | Pass `--payment-tx-hash` + `--payment-chain` + `--payment-token` with `--skip-payment`. |
+
+**x402 partial failure step names** (in `--json` error `.step`): `"x402 payment challenge"` (bad challenge from provider) · `"x402 signing"` (check `PEAQOS_PRIVATE_KEY`).
+
+**Fetch operation contract before placing order** — the CLI's example-input tip is skipped under `--json`/`--yes`. Use the SDK to get `OperationContract.example_input` first:
+
+```bash
+# Save as /tmp/fetch_contract.py, run before order placement
+SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> \
+  set -a && source .env && set +a && \
+  python3 /tmp/fetch_contract.py
+```
+
+See `knowledge/concepts.md#operationcontract` for the full script.
 
 **Exit codes:** 0 success · 1 validation error · 2 API/payment error · 3 config error
 
@@ -593,6 +610,115 @@ peaqos scale order dispute <order-id> \
   --reason "Service output did not match expected schema" \
   --pairing-token-file ./pairing.token
 ```
+
+---
+
+## `peaqos stream pay`
+
+Transfer tokens to a seller as payment for a data stream order.
+
+```bash
+peaqos stream pay \
+  --seller-address 0x<address> \
+  --amount <n> \
+  --chain peaq|base|solana \
+  --order-id <id> \
+  [--token-address 0x<erc20>] \
+  [--confirmation-url <url>] \
+  [--private-key-file <path>] \
+  [--rpc-url <url>] \
+  [--json]
+```
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--seller-address` | Yes | Seller's EVM address |
+| `--amount` | Yes | Token subunits (USDC: 6 decimals → 1 USDC = `1000000`) |
+| `--chain` | Yes | `peaq`, `base`, or `solana` |
+| `--order-id` | Yes | Order ID to associate payment with |
+| `--token-address` | No | ERC-20 contract (default: native token) |
+| `--confirmation-url` | No | Seller confirmation endpoint |
+| `--private-key-file` | No | Key file path; falls back to `PEAQOS_PRIVATE_KEY` |
+| `--rpc-url` | No | Override RPC endpoint |
+| `--json` | No | Machine-readable output |
+
+`--private-key-file` must be a path to a file the operator writes themselves — never a pasted key value.
+
+---
+
+## `peaqos stream payproof`
+
+Retry submitting a payment proof when initial delivery failed.
+
+```bash
+peaqos stream payproof \
+  --tx-hash 0x<hash> \
+  --order-id <id> \
+  --chain peaq|base|solana \
+  --payer-address 0x<addr> \
+  --payee-address 0x<addr> \
+  --amount <n> \
+  [--token <symbol>] \
+  [--token-address 0x<addr>] \
+  [--confirmation-url <url>] \
+  [--json]
+```
+
+All values must match the original payment transaction exactly.
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--tx-hash` | Yes | On-chain tx hash from the original payment |
+| `--order-id` | Yes | Order ID |
+| `--chain` | Yes | Chain the payment was made on |
+| `--payer-address` | Yes | Buyer's EVM address |
+| `--payee-address` | Yes | Seller's EVM address |
+| `--amount` | Yes | Subunits — must match original |
+| `--token` | No | Token symbol (e.g. `USDC`) |
+| `--token-address` | No | ERC-20 contract address |
+| `--confirmation-url` | No | Seller confirmation endpoint |
+| `--json` | No | Machine-readable output |
+
+---
+
+## `peaqos stream distribute`
+
+Seller-side: poll for payment confirmation then deliver encrypted chunks to S3.
+
+```bash
+peaqos stream distribute \
+  --chunk-dir <path> \
+  --owner-private-key-file <path> \
+  --confirmation-url <url> \
+  --order-id <id> \
+  --delivery s3 \
+  --s3 s3://bucket/prefix \
+  [--s3-region <region>] \
+  [--s3-endpoint <url>] \
+  [--presign-expiry <s>] \
+  [--poll-interval <s>] \
+  [--timeout <s>] \
+  [--max-file-size <bytes>] \
+  [--json]
+```
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--chunk-dir` | Yes | Directory with encrypted chunks from `peaqos stream publish` |
+| `--owner-private-key-file` | Yes | X25519 stream owner private key file (hex, one line) |
+| `--confirmation-url` | Yes | Seller payment confirmation endpoint |
+| `--order-id` | Yes | Order ID |
+| `--delivery` | Yes | Delivery method — currently only `s3` supported |
+| `--s3` | Yes (s3 delivery) | S3 destination URI (`s3://bucket/prefix`) |
+| `--s3-region` | No | AWS region |
+| `--s3-endpoint` | No | Custom S3-compatible endpoint (MinIO, R2, etc.) |
+| `--presign-expiry` | No | Pre-signed URL expiry in seconds (default: 3600) |
+| `--poll-interval` | No | Seconds between payment polls (default: 30) |
+| `--timeout` | No | Max poll wait in seconds (default: 3600) |
+| `--max-file-size` | No | Skip chunks exceeding this byte count |
+| `--json` | No | Machine-readable output |
+
+`--owner-private-key-file` is the X25519 stream encryption key (not `PEAQOS_PRIVATE_KEY`). Command is idempotent — safe to retry if polling times out.
 
 ---
 

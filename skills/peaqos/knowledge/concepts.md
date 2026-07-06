@@ -83,6 +83,70 @@ The definitive payment determination happens **after order creation**, not at se
 
 `wallet` and `escrow` follow the same 5-step code path in `peaqos scale order`. Step 4 differs: `wallet` records a payment proof; `escrow` locks funds in an escrow contract. Solana transfers always require manual hash paste — OWS auto-pay is EVM-only.
 
+**x402 rail — 6-step automatic flow:**
+
+When `order.payment.default_rail == "x402"`, the flow is fully automatic with 6 steps. No manual transfer, no confirm/dispute prompt. The CLI:
+1. Creates the order and receives a payment challenge containing EIP-3009 `TransferWithAuthorization` parameters.
+2. Calls `sign_x402_payment()` locally — pure offline computation using the operator's secp256k1 private key. No network call, no gas consumed at signing time.
+3. Records the signed proof.
+4. Executes the order with the payment signature attached.
+5. Auto-confirms delivery (step 6 in CLI progress output).
+
+USDC is debited atomically when the order executes. The step counter shows `[1/6]` through `[6/6]`. Do not present a confirm/dispute prompt for x402 orders — it is never needed and the CLI does not wait for one.
+
+**Partial failure step names for x402** (appear in `--json` error `.step`):
+- `"x402 payment challenge"` — challenge was missing or malformed; contact service provider
+- `"x402 signing"` — local signing failed; check `PEAQOS_PRIVATE_KEY` is set and valid
+
+**Dependency:** `peaq_os_sdk[x402]>=0.4.0` — bundled with `peaq-os-cli>=0.0.6`. No separate install needed.
+
+---
+
+## OperationContract
+
+Each service in the Machine Market exposes one or more `OperationContract` objects — structured descriptions of what operations the service supports.
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operation` | `str` | Operation name (e.g. `"inference"`, `"get-latest-price"`) |
+| `input_fields` | `tuple[OperationContractField, ...]` | Each field: `key`, `type`, optional `description` |
+| `output_fields` | `tuple[OperationContractField, ...]` | Same structure |
+| `example_input` | `Mapping[str, Any]` | Ready-to-use JSON template — use as the `--input` file template |
+| `summary` | `str \| None` | One-line description from the service provider |
+| `notes` | `tuple[str, ...]` | Additional guidance |
+
+**How the skill fetches it** (before calling `peaqos scale order`):
+
+```python
+import json, os
+from peaq_os_sdk import PeaqOSClient
+from peaq_os_sdk.types.orchestration.market_service import GetMarketServiceOptions
+
+client = PeaqOSClient()
+result = client.orchestration.get_market_service(
+    os.environ["SERVICE_ID"],
+    GetMarketServiceOptions(machine_id=os.environ.get("MACHINE_ID"))
+)
+for c in result.item.operation_contracts:
+    if c.operation == os.environ.get("OPERATION", c.operation):
+        print(f"Operation: {c.operation}")
+        if c.summary: print(f"Summary: {c.summary}")
+        for n in c.notes: print(f"Note: {n}")
+        print("\nInput fields:")
+        for f in c.input_fields:
+            desc = f" — {f.description}" if f.description else ""
+            print(f"  {f.key} ({f.type}){desc}")
+        print("\nExample input:")
+        print(json.dumps(c.example_input, indent=2))
+        if not os.environ.get("OPERATION"): print("---")
+```
+
+Run as: `SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> python3 <script>`
+
+The `example_input` dict is the canonical template for `--input` files. The CLI's interactive `_show_example_input_tip` is **skipped when `--json` or `--yes` is set**, so the skill must always fetch via the SDK script before placing an order.
+
 ---
 
 ## Order and payment status values
