@@ -613,17 +613,109 @@ peaqos scale order dispute <order-id> \
 
 ---
 
+## `peaqos stream publish`
+
+Chunk, encrypt, and sign a data file for secure distribution. Produces per-chunk envelope files (`chunk-*.json`), encrypted data blobs (`chunk-*.bin`), and a `manifest.json`.
+
+```bash
+peaqos stream publish \
+  --input <file-or-url> \
+  --output-dir <dir> \
+  --owner-public-key <hex> \
+  --operator-public-key <hex> \
+  --machine-public-key <hex> \
+  --signing-key-file <path> \
+  --machine-did <did:peaq:0x...> \
+  --machine-key-id <did:peaq:0x...#keys-1> \
+  [--chunk-size <bytes>] \
+  [--s3 s3://bucket/prefix [--s3-region <r>] [--s3-endpoint <url>]] \
+  [--json]
+```
+
+Public keys are X25519 hex (64 chars). Signing key file is an Ed25519 private key hex file. `--machine-key-id` is required — the format is `<machine-did>#keys-1` (the help text shows this as an example). S3 upload (when `--s3` is given) uses `PEAQOS_S3_ACCESS_KEY_ID` / `PEAQOS_S3_SECRET_ACCESS_KEY` env vars. Output: `.sourceHash`, `.totalChunks`, `.chunkSize`, `.machineDid`, `.createdAt`.
+
+---
+
+## `peaqos stream grant`
+
+Re-wrap per-chunk encryption keys for a specific buyer using the owner's private key. Buyer receives decryption access without the owner ever sharing their private key.
+
+```bash
+peaqos stream grant \
+  --chunk-dir <dir> \
+  --buyer-public-key <hex> \
+  --buyer-id <id> \
+  --owner-private-key-file <stream-owner.key> \
+  --output-dir <dir> \
+  [--max-file-size <bytes>] \
+  [--json]
+```
+
+`--buyer-public-key` is the buyer's X25519 public key (64 hex chars). `--buyer-id` is their DID or identifier — must exactly match what is passed to `peaqos stream consume --buyer-id`. Output: `.fileCount`, `.chunkCount`.
+
+---
+
+## `peaqos stream consume`
+
+Decrypt and reassemble a purchased stream. Two mutually exclusive input modes:
+
+**Mode A — Download URL** (seller provides a pre-signed release package URL):
+
+```bash
+peaqos stream consume \
+  --download-url <https://...> \
+  --buyer-private-key-file <path> \
+  --buyer-id <id> \
+  --output <path> \
+  [--work-dir <path>] \
+  [--keep-files] \
+  [--json]
+```
+
+**Mode B — Local files** (chunk envelopes, access files, and data blobs already downloaded):
+
+```bash
+peaqos stream consume \
+  --chunk-dir <dir> \
+  --access-dir <dir> \
+  --data-dir <dir> \
+  --buyer-private-key-file <path> \
+  --buyer-id <id> \
+  --output <path> \
+  [--skip-verify] \
+  [--json]
+```
+
+| Flag | Mode | Purpose |
+|------|------|---------|
+| `--download-url` | A | HTTPS URL to self-contained release package (ZIP or manifest+files) from seller. Mutually exclusive with `--chunk-dir`/`--access-dir`/`--data-dir`. |
+| `--work-dir` | A | Working directory for downloaded files (default: auto temp dir, cleaned up after). |
+| `--keep-files` | A | Keep work directory after successful reassembly. |
+| `--chunk-dir` | B | Directory with `chunk-*.json` envelopes. |
+| `--access-dir` | B | Directory with buyer access `*.json` files from grant. |
+| `--data-dir` | B | Directory with `chunk-*.bin` blobs (often same as `--chunk-dir`). |
+| `--buyer-private-key-file` | Both | Path to buyer's X25519 private key file (hex). |
+| `--buyer-id` | Both | Must exactly match the ID used during grant. |
+| `--output` | Both | Output file path for reassembled data. |
+| `--skip-verify` | B | Skip chain integrity check (debugging only). |
+| `--json` | Both | Machine-readable output. |
+
+Output: `.output`, `.totalBytes`, `.sourceHash`, `.verified`.
+
+---
+
 ## `peaqos stream pay`
 
-Transfer tokens to a seller as payment for a data stream order.
+Transfer tokens to a seller as payment for a data stream order. Optionally submits a payment proof immediately after transfer when `--confirmation-url` is provided; omit it to transfer only and submit proof later with `payproof`.
 
 ```bash
 peaqos stream pay \
   --seller-address 0x<address> \
-  --amount <n> \
+  --amount <decimal> \
   --chain peaq|base|solana \
   --order-id <id> \
   [--token-address 0x<erc20>] \
+  [--token-decimals <n>] \
   [--confirmation-url <url>] \
   [--private-key-file <path>] \
   [--rpc-url <url>] \
@@ -632,35 +724,40 @@ peaqos stream pay \
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--seller-address` | Yes | Seller's EVM address |
-| `--amount` | Yes | Token subunits (USDC: 6 decimals → 1 USDC = `1000000`) |
+| `--seller-address` | Yes | Seller's EVM address (or Solana base58 address) |
+| `--amount` | Yes | **Human-readable decimal amount** (e.g. `10.5` for 10.5 USDC — not subunits) |
 | `--chain` | Yes | `peaq`, `base`, or `solana` |
 | `--order-id` | Yes | Order ID to associate payment with |
-| `--token-address` | No | ERC-20 contract (default: native token) |
-| `--confirmation-url` | No | Seller confirmation endpoint |
-| `--private-key-file` | No | Key file path; falls back to `PEAQOS_PRIVATE_KEY` |
-| `--rpc-url` | No | Override RPC endpoint |
+| `--token-address` | No | ERC-20 contract or SPL mint address (default: native token) |
+| `--token-decimals` | No | Override token decimal count (e.g. `6` for USDC) |
+| `--confirmation-url` | No | Seller endpoint — when provided, proof submitted immediately after transfer |
+| `--private-key-file` | No | Key file (0x-prefixed hex); falls back to `PEAQOS_PRIVATE_KEY` |
+| `--rpc-url` | No | **Required for `--chain base` or `--chain solana`** |
 | `--json` | No | Machine-readable output |
 
+**Solana:** `--chain solana` requires `PEAQOS_OWS_WALLET` set to a wallet with a Solana account. `--private-key-file` alone is insufficient for Solana transfers.
+
 `--private-key-file` must be a path to a file the operator writes themselves — never a pasted key value.
+
+**JSON output:** `txHash`, `chain`, `status`, `payerAddress`, `payeeAddress`, `amount`, `token`, `tokenAddress`, `proof` (object with `accepted`, `orderId`, `submittedAt` — only present when `--confirmation-url` was supplied).
 
 ---
 
 ## `peaqos stream payproof`
 
-Retry submitting a payment proof when initial delivery failed.
+Submit a payment proof when the transfer was done separately (or when proof submission from `stream pay` failed).
 
 ```bash
 peaqos stream payproof \
   --tx-hash 0x<hash> \
   --order-id <id> \
+  --confirmation-url <url> \
   --chain peaq|base|solana \
   --payer-address 0x<addr> \
   --payee-address 0x<addr> \
-  --amount <n> \
+  --amount <decimal> \
   [--token <symbol>] \
   [--token-address 0x<addr>] \
-  [--confirmation-url <url>] \
   [--json]
 ```
 
@@ -668,22 +765,24 @@ All values must match the original payment transaction exactly.
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--tx-hash` | Yes | On-chain tx hash from the original payment |
+| `--tx-hash` | Yes | On-chain tx hash or Solana signature from the original payment |
 | `--order-id` | Yes | Order ID |
+| `--confirmation-url` | Yes | Seller endpoint to submit proof to |
 | `--chain` | Yes | Chain the payment was made on |
-| `--payer-address` | Yes | Buyer's EVM address |
-| `--payee-address` | Yes | Seller's EVM address |
-| `--amount` | Yes | Subunits — must match original |
-| `--token` | No | Token symbol (e.g. `USDC`) |
-| `--token-address` | No | ERC-20 contract address |
-| `--confirmation-url` | No | Seller confirmation endpoint |
-| `--json` | No | Machine-readable output |
+| `--payer-address` | Yes | Buyer's wallet address |
+| `--payee-address` | Yes | Seller's wallet address |
+| `--amount` | Yes | **Human-readable decimal amount** — must match original (e.g. `10.5`) |
+| `--token` | No | Token symbol metadata (e.g. `USDC`) |
+| `--token-address` | No | ERC-20 contract or SPL mint address |
+| `--json` | No | Machine-readable output (`accepted`, `orderId`, `submittedAt`) |
+
+Note: `--confirmation-url` is **required** for `payproof` (unlike `pay` where it is optional).
 
 ---
 
 ## `peaqos stream distribute`
 
-Seller-side: poll for payment confirmation then deliver encrypted chunks to S3.
+Seller-side: poll for buyer payment confirmation, generate buyer access files on-the-fly from the payment info and owner key, then upload them to S3. Produces a pre-signed download URL for the buyer to use with `peaqos stream consume --download-url`.
 
 ```bash
 peaqos stream distribute \
@@ -704,21 +803,43 @@ peaqos stream distribute \
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--chunk-dir` | Yes | Directory with encrypted chunks from `peaqos stream publish` |
-| `--owner-private-key-file` | Yes | X25519 stream owner private key file (hex, one line) |
-| `--confirmation-url` | Yes | Seller payment confirmation endpoint |
+| `--chunk-dir` | Yes | Directory with chunk envelopes and encrypted blobs from `peaqos stream publish` |
+| `--owner-private-key-file` | Yes | X25519 owner private key (hex) — used to generate buyer access files |
+| `--confirmation-url` | Yes | Endpoint to poll for buyer payment confirmation |
 | `--order-id` | Yes | Order ID |
-| `--delivery` | Yes | Delivery method — currently only `s3` supported |
-| `--s3` | Yes (s3 delivery) | S3 destination URI (`s3://bucket/prefix`) |
-| `--s3-region` | No | AWS region |
+| `--delivery` | Yes | Delivery channel — currently only `s3` |
+| `--s3` | Yes | S3 destination URI (`s3://bucket/prefix`) |
+| `--s3-region` | No | S3 region |
 | `--s3-endpoint` | No | Custom S3-compatible endpoint (MinIO, R2, etc.) |
-| `--presign-expiry` | No | Pre-signed URL expiry in seconds (default: 3600) |
+| `--presign-expiry` | No | Pre-signed download URL expiry in seconds (default: 3600) |
 | `--poll-interval` | No | Seconds between payment polls (default: 30) |
 | `--timeout` | No | Max poll wait in seconds (default: 3600) |
-| `--max-file-size` | No | Skip chunks exceeding this byte count |
+| `--max-file-size` | No | Max buyer access file size in bytes (default: 512000 = 500 KB) |
 | `--json` | No | Machine-readable output |
 
-`--owner-private-key-file` is the X25519 stream encryption key (not `PEAQOS_PRIVATE_KEY`). Command is idempotent — safe to retry if polling times out.
+**S3 credentials:** set `PEAQOS_S3_ACCESS_KEY_ID` and `PEAQOS_S3_SECRET_ACCESS_KEY` in your environment (not the standard AWS env vars).
+
+**What it uploads:** NOT the encrypted chunks themselves. The command generates buyer-specific access files (using the owner private key + buyer identity from the payment confirmation) and uploads those. The pre-signed S3 URL is a self-contained release package the buyer can pass directly to `peaqos stream consume --download-url`.
+
+**JSON output:**
+
+```json
+{
+  "order_id": "<id>",
+  "buyer_id": "<buyer-did>",
+  "tx_hash": "<payment-tx>",
+  "chunks_distributed": 12,
+  "access_files_count": 3,
+  "delivery": {
+    "channel": "s3",
+    "download_url": "https://...",
+    "delivered_at": "2026-07-06T...",
+    "presign_expiry": 3600
+  }
+}
+```
+
+`delivery.download_url` → pass to buyer; buyer uses `peaqos stream consume --download-url <url>`. Command is idempotent — safe to retry if polling times out.
 
 ---
 

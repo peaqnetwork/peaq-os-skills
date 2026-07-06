@@ -271,3 +271,43 @@ This creates a new pairing with a new ID and pairing token. Update any stored `p
 **Symptom:** Exit 2 — `ORDER_CLOSED`
 **Cause:** Attempted to execute, confirm, or dispute an order that is already in a terminal state.
 **Fix:** Check the current status with `peaqos scale order status <order-id> --json`. Terminal states: `confirmed` · `cancelled` · `disputed` · `failed`.
+
+**Symptom:** Order fails at step `"x402 payment challenge"` (visible in `--json` error output `.step`)
+**Cause:** The service returned a missing or malformed x402 payment challenge — the `payment.rail.metadata` block did not contain a valid `TransferWithAuthorization` signing challenge.
+**Fix:** This is a service-provider issue, not an operator issue. Contact the service provider. As a workaround, search for an alternative service if one is available.
+
+**Symptom:** Order fails at step `"x402 signing"` (visible in `--json` error output `.step`)
+**Cause:** Local x402 signing failed. Most common cause: `PEAQOS_PRIVATE_KEY` is missing, malformed, or does not correspond to the wallet address registered with the service.
+**Fix:** Verify `PEAQOS_PRIVATE_KEY` is set in `.env` (64 hex chars, `0x` prefix). Run `peaqos whoami` to confirm the active address. If using OWS wallet, ensure the wallet is unlocked and the correct wallet is active.
+
+**Symptom:** `x402` module not found or import error during order placement
+**Cause:** Older SDK version that did not bundle the x402 dependency.
+**Fix:** Upgrade: `pip install --upgrade peaq-os-cli` (v0.0.6+ bundles `peaq_os_sdk[x402]>=0.4.0`).
+
+---
+
+## Phase: Stream commands
+
+**Symptom:** `peaqos stream consume` exits 1 — `--chunk-dir is required when --download-url is not provided`
+**Cause:** Neither `--download-url` nor the three directory flags were supplied.
+**Fix:** Use `--download-url <url>` (seller-provided release package URL) or supply `--chunk-dir`, `--access-dir`, and `--data-dir` together.
+
+**Symptom:** `peaqos stream consume` exits 1 — `--download-url is mutually exclusive with --chunk-dir, --access-dir, and --data-dir`
+**Cause:** Both `--download-url` and directory flags were passed.
+**Fix:** Use one mode or the other — never both.
+
+**Symptom:** `Key commitment verification failed` (grant or consume)
+**Cause:** The private key file does not match the public key used during the opposing step — wrong `--owner-private-key-file` in grant, or wrong `--buyer-private-key-file` in consume.
+**Fix:** For grant: use `stream-owner.key` from the original publish. For consume: use the buyer's X25519 private key whose public key was passed to `peaqos stream grant --buyer-public-key`.
+
+**Symptom:** `access not granted for this buyer private key` (consume)
+**Cause:** The access files in `--access-dir` (or the downloaded package) do not include an entry for this buyer's key.
+**Fix:** Re-run `peaqos stream grant` with the correct buyer public key, then share the updated access files.
+
+**Symptom:** `Buyer ID mismatch` (consume)
+**Cause:** `--buyer-id` passed to consume does not match the ID used during grant.
+**Fix:** Use the exact string that was passed to `peaqos stream grant --buyer-id`.
+
+**Symptom:** `peaqos stream distribute` times out waiting for payment confirmation
+**Cause:** Buyer has not yet completed payment, or `--confirmation-url` is unreachable.
+**Fix:** Verify the buyer ran `peaqos stream pay` successfully. Check `--confirmation-url` is reachable from the seller's host. The command is idempotent — safe to re-run; it resumes polling from where it left off.
