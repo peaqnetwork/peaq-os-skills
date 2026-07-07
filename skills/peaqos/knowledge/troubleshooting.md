@@ -122,15 +122,19 @@ If the RPC is lagging, wait ~30s and re-run.
 **Cause:** `--ts` is ahead of the network's block timestamp.
 **Fix:** Use a timestamp at or before now. `date +%s` gives current Unix time.
 
-**Symptom:** Exit 2 — `MachineNotBonded` revert even though `isStaked()` returns `True`
-**Cause:** Known bug in how the CLI constructs the event submission transaction — the calldata differs from a direct SDK call in a way that triggers a false bonding check failure.
-**Fix:** Submit the event directly via the SDK as a workaround while the CLI bug is investigated:
+**Symptom:** Exit 2 — `qualify event` reverts with **empty revert data** (`data: '0x'`) even though the machine exists, is active, and `isStaked()` returns `True`. The SDK fallback reverts identically (tx mined, `status=0`).
+**Cause:** **Deployed EventRegistry ABI mismatch** (confirmed live on agung, 2026-07-06). agung runs a pre-currency EventRegistry whose function is `submitEvent(uint256,uint8,uint256,uint256,bytes32,uint8,uint256,bytes32,bytes)` — selector `0x6b58c7dc`, **no `string currency` parameter** — while `peaq-os-sdk` 0.4.0 ships the newer signature (selector `0xe58a43ca`). Every CLI/SDK submission therefore calls a selector the deployed contract does not dispatch → bare revert with no error data. (An earlier version of this entry blamed CLI calldata construction — that was a misdiagnosis of this same mismatch.)
+**Fix:** Not fixable client-side — escalate to the peaq team (redeploy agung's EventRegistry or ship network-aware ABIs in the SDK). Interim agung-only workaround — submit with the legacy 9-argument ABI directly (no currency; args: machineId, eventType, value, timestamp, dataHash, trustLevel, sourceChainId, sourceTxHash, metadata; eventType 0=revenue, 1=activity):
 ```python
-from peaq_os_sdk import EventRegistry
-event_reg = EventRegistry(web3, contract_address)
-event_reg.functions.submitEvent(...).transact({'from': account.address})
+ABI = [{"inputs":[
+    {"name":"machineId","type":"uint256"},{"name":"eventType","type":"uint8"},
+    {"name":"value","type":"uint256"},{"name":"timestamp","type":"uint256"},
+    {"name":"dataHash","type":"bytes32"},{"name":"trustLevel","type":"uint8"},
+    {"name":"sourceChainId","type":"uint256"},{"name":"sourceTxHash","type":"bytes32"},
+    {"name":"metadata","type":"bytes"}],
+    "name":"submitEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]
 ```
-Compare the exact transaction calldata between the CLI and SDK calls to isolate the root cause.
+Confirm with the peaq team how the legacy contract's `value` is interpreted downstream (the subunit convention arrived with the newer contract). Before assuming this cause on another network, verify with a selector check: fetch the ERC-1967 implementation bytecode and test whether `0xe58a43ca` is present. **Mainnet verified unaffected (2026-07-06)** — its implementation matches SDK 0.4.0, so this symptom on mainnet would indicate a different cause.
 
 **Symptom:** Exit 1 — `RateLimitExceeded`
 **Cause:** Too many events submitted within the configured time window.
@@ -272,11 +276,11 @@ This creates a new pairing with a new ID and pairing token. Update any stored `p
 **Cause:** Attempted to execute, confirm, or dispute an order that is already in a terminal state.
 **Fix:** Check the current status with `peaqos scale order status <order-id> --json`. Terminal states: `confirmed` · `cancelled` · `disputed` · `failed`.
 
-**Symptom:** Order fails at step `"x402 payment challenge"` (visible in `--json` error output `.step`)
+**Symptom:** Order fails at step `x402 payment challenge` (stderr text: `Order '<id>' was created but x402 payment challenge failed.` — the CLI emits no JSON on errors)
 **Cause:** The service returned a missing or malformed x402 payment challenge — the `payment.rail.metadata` block did not contain a valid `TransferWithAuthorization` signing challenge.
 **Fix:** This is a service-provider issue, not an operator issue. Contact the service provider. As a workaround, search for an alternative service if one is available.
 
-**Symptom:** Order fails at step `"x402 signing"` (visible in `--json` error output `.step`)
+**Symptom:** Order fails at step `x402 signing` (stderr text: `Order '<id>' was created but x402 signing failed.`)
 **Cause:** Local x402 signing failed. Most common cause: `PEAQOS_PRIVATE_KEY` is missing, malformed, or does not correspond to the wallet address registered with the service.
 **Fix:** Verify `PEAQOS_PRIVATE_KEY` is set in `.env` (64 hex chars, `0x` prefix). Run `peaqos whoami` to confirm the active address. If using OWS wallet, ensure the wallet is unlocked and the correct wallet is active.
 
@@ -304,9 +308,13 @@ This creates a new pairing with a new ID and pairing token. Update any stored `p
 **Cause:** The access files in `--access-dir` (or the downloaded package) do not include an entry for this buyer's key.
 **Fix:** Re-run `peaqos stream grant` with the correct buyer public key, then share the updated access files.
 
-**Symptom:** `Buyer ID mismatch` (consume)
-**Cause:** `--buyer-id` passed to consume does not match the ID used during grant.
-**Fix:** Use the exact string that was passed to `peaqos stream grant --buyer-id`.
+**Symptom:** `No buyer access for chunk N` or `No buyer access files found in <dir>` (consume) when the files look correct
+**Cause:** `--buyer-id` passed to consume does not match the ID used during grant — access entries with a non-matching `recipientId` are silently skipped, so a wrong buyer ID looks identical to missing access files. (There is no literal "Buyer ID mismatch" error.)
+**Fix:** Use the exact string that was passed to `peaqos stream grant --buyer-id`. If it matches, re-run grant — some chunks were missed.
+
+**Symptom:** `boto3 is required for S3 upload. Install with: pip install peaq-os-cli[s3]` (publish `--s3` or distribute)
+**Cause:** S3 support is an optional extra — boto3 is not installed with the base CLI.
+**Fix:** `pip install 'peaq-os-cli[s3]'` and re-run.
 
 **Symptom:** `peaqos stream distribute` times out waiting for payment confirmation
 **Cause:** Buyer has not yet completed payment, or `--confirmation-url` is unreachable.

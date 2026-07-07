@@ -10,7 +10,7 @@ description: |
   service discovery, or the peaqos CLI.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
-compatibility: Requires Python 3.10+ and peaq-os-cli
+compatibility: Requires Python 3.11+ and peaq-os-cli (peaq-os-sdk 0.4.0 uses datetime.UTC, which fails to import on 3.10)
 ---
 
 # peaqOS — Claude Code Adapter

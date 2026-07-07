@@ -21,7 +21,7 @@ Adapts its language to your background: concise and direct for developers, plain
 
 ## Requirements
 
-- **Python ≥ 3.10**
+- **Python ≥ 3.11** (peaq-os-sdk 0.4.0 uses `datetime.UTC`, a 3.11+ API — imports fail on 3.10 despite the SDK's declared 3.10 floor)
 - **`peaq-os-cli`** installed (see below)
 - A wallet private key (the skill can generate one for you if needed)
 - For mainnet: PEAQ tokens to cover gas (the gas station handles this automatically)

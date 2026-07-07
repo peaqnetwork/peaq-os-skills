@@ -29,7 +29,7 @@ Contract addresses, RPC endpoints, and network constants for the `peaqos` CLI.
 | `PEAQOS_NETWORK` | `mainnet` |
 | Chain ID | 3338 |
 | `PEAQOS_RPC_URL` | `https://peaq.api.onfinality.io/public` |
-| `PEAQOS_MCR_API_URL` | `https://api.peaqos.io` |
+| `PEAQOS_MCR_API_URL` | `https://mcr.peaq.xyz` |
 | `PEAQOS_GAS_STATION_URL` | `https://depinstation.peaq.xyz` |
 | `PEAQOS_ORCHESTRATION_URL` | `https://orchestration.peaq.xyz` |
 | `IDENTITY_REGISTRY_ADDRESS` | `0xb53Af985765031936311273599389b5B68aC9956` |
@@ -43,6 +43,7 @@ Contract addresses, RPC endpoints, and network constants for the `peaqos` CLI.
 
 | Issue | Detail |
 |-------|--------|
+| **agung EventRegistry ABI mismatch** | Confirmed live 2026-07-06: agung's deployed EventRegistry (`0x2DAD...0040`, impl `0x21D3...0d04`) uses the pre-currency `submitEvent` signature (selector `0x6b58c7dc`); `peaq-os-sdk` 0.4.0 calls the newer one (`0xe58a43ca`). **All event submission on agung reverts with empty data** — machine registration, bonding, and NFT minting are unaffected. Downstream effect: no events → machine never indexed → `qualify mcr` / `show machine` return 404/"not found". **Mainnet is unaffected** — its implementation (`0xe5F6...b553`) matches SDK 0.4.0 (verified 2026-07-06). Escalated to the peaq team; see `knowledge/troubleshooting.md` for the legacy-ABI workaround. |
 | `peaqos init` contract address mis-mapping | Known bug: contract address inputs can be silently mis-mapped when piped or entered quickly. Manually verify each variable in `.env` against the testnet values above before running `peaqos activate`. |
 | DID precompile RPC quirk (agung) | Step 6 of `peaqos activate` may fail with `Web3RPCError` on agung. Non-blocking — re-run `activate` (idempotent). Machine is registered and bonded regardless. |
 | MCR indexer lag | Up to 90s after first event before MCR API reflects on-chain state. Use `peaqos show machine <did> --json` for immediate chain-direct lookup. |

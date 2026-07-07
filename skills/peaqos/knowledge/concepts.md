@@ -18,7 +18,7 @@ Two separate ID spaces exist. Do not mix them.
 
 ## MCR — Machine Credit Rating
 
-An on-chain credit score (0–100) computed from verified event history. Calculated by the MCR API from events submitted via `peaqos qualify event`. Ratings: `Provisioned` (no events yet) → `B` → `BB` → `BBB` → `A` → `AA` → `AAA`.
+An on-chain credit score (0–100) computed from verified event history. Calculated by the MCR API from events submitted via `peaqos qualify event`. Ratings: `Provisioned` (no events yet), then `NR` (not rated) → `B` → `BB` → `BBB` → `A` → `AA` → `AAA`.
 
 **Indexer lag:** Up to 90s after an event lands on-chain before the MCR API reflects it. Use `peaqos show machine <did> --json` for chain-direct state.
 
@@ -94,9 +94,9 @@ When `order.payment.default_rail == "x402"`, the flow is fully automatic with 6 
 
 USDC is debited atomically when the order executes. The step counter shows `[1/6]` through `[6/6]`. Do not present a confirm/dispute prompt for x402 orders — it is never needed and the CLI does not wait for one.
 
-**Partial failure step names for x402** (appear in `--json` error `.step`):
-- `"x402 payment challenge"` — challenge was missing or malformed; contact service provider
-- `"x402 signing"` — local signing failed; check `PEAQOS_PRIVATE_KEY` is set and valid
+**Partial failure step names for x402** (appear in the stderr error text — the CLI emits no JSON on errors; the message reads `Order '<id>' was created but <step> failed.`):
+- `x402 payment challenge` — challenge was missing or malformed; contact service provider
+- `x402 signing` — local signing failed; check `PEAQOS_PRIVATE_KEY` is set and valid
 
 **Dependency:** `peaq_os_sdk[x402]>=0.4.0` — bundled with `peaq-os-cli>=0.0.6`. No separate install needed.
 
@@ -121,10 +121,19 @@ Each service in the Machine Market exposes one or more `OperationContract` objec
 
 ```python
 import json, os
-from peaq_os_sdk import PeaqOSClient
-from peaq_os_sdk.types.orchestration.market_service import GetMarketServiceOptions
+from peaq_os_sdk import PeaqosClient
+from peaq_os_sdk.orchestration import GetMarketServiceOptions
 
-client = PeaqOSClient()
+# SDK reads PEAQOS_API_KEY; the CLI .env uses PEAQOS_ORCH_API_KEY — bridge them.
+if os.environ.get("PEAQOS_ORCH_API_KEY") and not os.environ.get("PEAQOS_API_KEY"):
+    os.environ["PEAQOS_API_KEY"] = os.environ["PEAQOS_ORCH_API_KEY"]
+# This script makes platform-auth HTTP calls only — it never signs on-chain.
+# If the .env is OWS-only (PEAQOS_OWS_WALLET, no raw key), satisfy from_env()
+# with a placeholder signing key that is never used.
+if os.environ.get("PEAQOS_OWS_WALLET") and not os.environ.get("PEAQOS_PRIVATE_KEY"):
+    os.environ["PEAQOS_PRIVATE_KEY"] = "0x" + "11" * 32
+
+client = PeaqosClient.from_env()
 result = client.orchestration.get_market_service(
     os.environ["SERVICE_ID"],
     GetMarketServiceOptions(machine_id=os.environ.get("MACHINE_ID"))
@@ -143,7 +152,7 @@ for c in result.item.operation_contracts:
         if not os.environ.get("OPERATION"): print("---")
 ```
 
-Run as: `SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> python3 <script>`
+Run as: `set -a; source .env 2>/dev/null; set +a; SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> python3 <script>` — sourcing `.env` first is required; the SDK's `from_env()` reads the process environment and does not load `.env` itself.
 
 The `example_input` dict is the canonical template for `--input` files. The CLI's interactive `_show_example_input_tip` is **skipped when `--json` or `--yes` is set**, so the skill must always fetch via the SDK script before placing an order.
 

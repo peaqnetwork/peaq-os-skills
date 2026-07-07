@@ -5,11 +5,13 @@ Agent-executable playbooks for peaqOS operations using the `peaqos` CLI. Each pl
 **User input rule:** Whenever asking the operator to choose between a fixed set of options, use `AskUserQuestion` with explicit options — never free text for binary or enumerated choices. Only use free text for genuinely open-ended inputs (URLs, wallet addresses, machine names, reasons).
 
 **Environment loading rule — apply to every peaqos command:**
-Each shell call runs in a fresh environment. Prefix every `peaqos` invocation with:
+Each shell call runs in a fresh environment. Prefix every `peaqos` invocation (and every SDK script that reads env vars) with:
 ```
-set -a && source .env && set +a &&
+set -a; source .env 2>/dev/null; set +a;
 ```
-This ensures `.env` variables are loaded before the CLI runs. Example: `set -a && source .env && set +a && peaqos whoami`. Commands shown in playbooks below omit this prefix for readability — always prepend it.
+This loads `.env` before the CLI runs, and — because it uses `;` rather than `&&` — does not abort the command when `.env` does not exist yet (e.g. the P1 first run, where `peaqos --version` and the env-writer script must run before any `.env` exists). Example: `set -a; source .env 2>/dev/null; set +a; peaqos whoami`. Commands shown in playbooks below omit this prefix for readability — always prepend it.
+
+**Heredoc script rule:** Playbook scripts shown as `python3 - << 'PYEOF' … PYEOF` read arguments via `sys.argv`. When running them inline, place the arguments after the `-`: `python3 - <arg1> <arg2> << 'PYEOF'`. Alternatively, save the block to a file and run `python3 <script> <args>` as shown in each "Run as" line.
 
 ---
 
@@ -76,8 +78,10 @@ This check applies to every playbook. It ensures the operator always knows which
 ### Scale config check (P2, P3, P4, P7)
 
 ```bash
-echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
+set -a; source .env 2>/dev/null; set +a; echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
 ```
+
+(The prefix is required here — this check runs in a fresh shell, and the P1-written `.env` contains an empty `PEAQOS_ORCHESTRATION_URL=` line, which correctly reports `MISSING` via `:-`.)
 
 `MISSING` → check the network from `peaqos whoami`, then:
 
@@ -192,7 +196,7 @@ if network == "testnet":
     MACH_NFT    = "0xB41C2A4f1c19b6B06beaAce0F5CD8439e77C4b1c"
 else:  # mainnet
     RPC_URL     = "https://peaq.api.onfinality.io/public"
-    MCR_URL     = "https://api.peaqos.io"
+    MCR_URL     = "https://mcr.peaq.xyz"
     GAS_STATION = "https://depinstation.peaq.xyz"
     ID_REG      = "0xb53Af985765031936311273599389b5B68aC9956"
     ID_STAKE    = "0x11c05A650704136786253e8685f56879A202b1C7"
@@ -232,7 +236,7 @@ print(f"{addr}:{network}")
 PYEOF
 ```
 
-Run as: `set -a && source .env && set +a && python3 <script> <network>` where `<network>` is `testnet` or `mainnet`.
+Run as: `set -a; source .env 2>/dev/null; set +a; python3 <script> <network>` where `<network>` is `testnet` or `mainnet`.
 
 Parse the output: `address:network` (split on `:`).
 
@@ -299,7 +303,7 @@ The Bash tool has no TTY, so `peaqos activate` aborts when it can't get TOTP inp
 
 Step A — Run activate to capture the QR URL (it will abort — that's expected):
 ```bash
-set -a && source .env && set +a && peaqos activate \
+set -a; source .env 2>/dev/null; set +a; peaqos activate \
   --doc-url "<doc-url>" --data-api "<data-api>" 2>&1 || true
 ```
 Parse the QR image URL from the output (look for `QR image URL: https://...`).
@@ -310,7 +314,7 @@ Fetch the QR image URL and display it to the operator. Ask:
 
 Step C — Re-run with the code piped to stdin:
 ```bash
-set -a; source .env; set +a; printf "<totp_code>\n" | peaqos activate \
+set -a; source .env 2>/dev/null; set +a; printf "<totp_code>\n" | peaqos activate \
   --doc-url "<doc-url>" --data-api "<data-api>"
 ```
 Note the semicolons (not `&&`) so the pipe connects to just `peaqos activate`.
@@ -343,7 +347,7 @@ Registers an on-chain machine in the Scale Machine Market. Produces a Market mac
 
 - Base config check
 - Scale config check
-- Confirm `machine_did` is available — from P1 output or `peaqos whoami`
+- Confirm `machine_did` is available — from P1 output, or derived as `did:peaq:<address>` from the `peaqos whoami` wallet address (self-managed machines only; see the `--identity-ref` note below)
 
 ### Inputs (collect all upfront)
 
@@ -351,7 +355,7 @@ Read `identity_ref` and `operator_address` from `peaqos whoami` output — do no
 
 | Input | Required | Notes |
 |-------|----------|-------|
-| `--identity-ref` | Yes | Use the Machine DID from `peaqos whoami` (`did:peaq:0x<address>`) — already known from preflight |
+| `--identity-ref` | Yes | The Machine DID. **Self-managed:** derive from the `peaqos whoami` wallet address (`did:peaq:0x<address>` — whoami prints the address, not the DID). **Proxy-managed:** use the Machine DID from P1 output (`did:peaq:<machine-address>`) — the whoami-derived DID is the *operator's* identity, not the machine's. |
 | `--display-name` | Yes | Ask: "What would you like to name this machine?" (free text, e.g. "My Edge Node") |
 | `--owner-id` | Yes | Default to the wallet address from `peaqos whoami` — only ask if the operator wants something different |
 | `--machine-type` | Yes | `AskUserQuestion`: options: `edge-node` / `compute-node` / `iot-device` / `robot` / `sensor` / `Other (I'll type it)` |
@@ -439,7 +443,9 @@ Then ask: `AskUserQuestion`: "Do you have access to the agent's private key (e.g
 
 ### Execute
 
-**Do not use the CLI to submit the pairing.** The CLI fetches its own fresh challenge when it runs, so the challenge_id it submits won't match the signature. Use direct API calls for both paths.
+**Do not use the CLI to submit the pairing.** The CLI fetches its own fresh challenge when it runs, so the challenge_id it submits won't match the signature. Use the Python SDK directly for both paths — it supports submitting a previously saved challenge_id, handles the API's wire format (camelCase) and auth headers, and returns typed responses.
+
+> SDK auth note: the SDK reads the platform API key from `PEAQOS_API_KEY`, while the CLI (and the `.env` written in P1) uses `PEAQOS_ORCH_API_KEY`. The scripts below bridge the two automatically.
 
 ---
 
@@ -452,44 +458,62 @@ Then run this single script — get challenge, sign, submit pairing, return toke
 
 ```bash
 python3 - << 'PYEOF'
-import os, sys, requests
+import os, sys
 from web3 import Web3
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from peaq_os_sdk import PeaqosClient
+from peaq_os_sdk.types.orchestration import (
+    AgentProofInput,
+    CreateAgentPairingChallengeRequest,
+    CreateAgentPairingRequest,
+)
 
 machine_id = sys.argv[1]
 agent_addr = Web3.to_checksum_address(sys.argv[2])
 provider   = sys.argv[3]
 role       = sys.argv[4]
-orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
-api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
-headers    = {"Content-Type": "application/json"}
-if api_key: headers["x-api-key"] = api_key
+
+# SDK reads PEAQOS_API_KEY; the CLI .env uses PEAQOS_ORCH_API_KEY — bridge them.
+if os.environ.get("PEAQOS_ORCH_API_KEY") and not os.environ.get("PEAQOS_API_KEY"):
+    os.environ["PEAQOS_API_KEY"] = os.environ["PEAQOS_ORCH_API_KEY"]
+# This script makes platform-auth HTTP calls only — it never signs on-chain.
+# If the .env is OWS-only (PEAQOS_OWS_WALLET, no raw key), satisfy from_env()
+# with a placeholder signing key that is never used.
+if os.environ.get("PEAQOS_OWS_WALLET") and not os.environ.get("PEAQOS_PRIVATE_KEY"):
+    os.environ["PEAQOS_PRIVATE_KEY"] = "0x" + "11" * 32
+
+orch = PeaqosClient.from_env().orchestration
 
 with open("/tmp/agent.key") as f:
     agent = Account.from_key(f.read().strip())
 
-r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings/challenges",
-    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role},
-    headers=headers)
-r.raise_for_status()
-challenge = r.json()["item"]
+challenge = orch.create_agent_pairing_challenge(
+    machine_id,
+    CreateAgentPairingChallengeRequest(
+        agent_address=agent_addr, agent_provider=provider, agent_role=role),
+).item
 
-sig = "0x" + agent.sign_message(encode_defunct(text=challenge["message"])).signature.hex()
+sig = "0x" + agent.sign_message(encode_defunct(text=challenge.message)).signature.hex()
 
-r2 = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings",
-    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role,
-          "agentProof": {"challengeId": challenge["challenge_id"], "signature": sig}},
-    headers=headers)
-if not r2.ok:
-    print(f"Error {r2.status_code}: {r2.text}"); sys.exit(1)
-pairing = r2.json()["item"]
-print(f"pairing_id={pairing['id']}")
-print(f"pairing_token={pairing.get('pairing_token','NOT_RETURNED')}")
+pairing = orch.create_agent_pairing(
+    machine_id,
+    CreateAgentPairingRequest(
+        agent_address=agent_addr, agent_provider=provider, agent_role=role,
+        agent_proof=AgentProofInput(challenge_id=challenge.challenge_id, signature=sig)),
+).item
+
+print(f"pairing_id={pairing.id}")
+if not pairing.pairing_token:
+    print("ERROR: no pairing_token returned — do not proceed. "
+          "The pairing may exist without a usable token; check with the platform team.",
+          file=sys.stderr)
+    sys.exit(1)
+print(f"pairing_token={pairing.pairing_token}")
 PYEOF
 ```
 
-Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role>`
+Run as: `set -a; source .env 2>/dev/null; set +a; python3 <script> <machine-id> <agent-address> <provider> <role>`
 
 Clean up: `rm -f /tmp/agent.key`
 
@@ -501,33 +525,41 @@ Clean up: `rm -f /tmp/agent.key`
 
 ```bash
 python3 - << 'PYEOF'
-import os, sys, requests
+import os, sys
 from web3 import Web3
+from peaq_os_sdk import PeaqosClient
+from peaq_os_sdk.types.orchestration import CreateAgentPairingChallengeRequest
 
 machine_id = sys.argv[1]
 agent_addr = Web3.to_checksum_address(sys.argv[2])
 provider   = sys.argv[3]
 role       = sys.argv[4]
-orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
-api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
-headers    = {"Content-Type": "application/json"}
-if api_key: headers["x-api-key"] = api_key
 
-r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings/challenges",
-    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role},
-    headers=headers)
-if not r.ok:
-    print(f"Error {r.status_code}: {r.text}"); sys.exit(1)
-c = r.json()["item"]
-open("/tmp/challenge_id.txt", "w").write(c["challenge_id"])
-print(f"expires_at={c['expires_at']}")
+# SDK reads PEAQOS_API_KEY; the CLI .env uses PEAQOS_ORCH_API_KEY — bridge them.
+if os.environ.get("PEAQOS_ORCH_API_KEY") and not os.environ.get("PEAQOS_API_KEY"):
+    os.environ["PEAQOS_API_KEY"] = os.environ["PEAQOS_ORCH_API_KEY"]
+# This script makes platform-auth HTTP calls only — it never signs on-chain.
+# If the .env is OWS-only (PEAQOS_OWS_WALLET, no raw key), satisfy from_env()
+# with a placeholder signing key that is never used.
+if os.environ.get("PEAQOS_OWS_WALLET") and not os.environ.get("PEAQOS_PRIVATE_KEY"):
+    os.environ["PEAQOS_PRIVATE_KEY"] = "0x" + "11" * 32
+
+orch = PeaqosClient.from_env().orchestration
+
+c = orch.create_agent_pairing_challenge(
+    machine_id,
+    CreateAgentPairingChallengeRequest(
+        agent_address=agent_addr, agent_provider=provider, agent_role=role),
+).item
+open("/tmp/challenge_id.txt", "w").write(c.challenge_id)
+print(f"expires_at={c.expires_at}")
 print("--- SIGN THIS EXACT TEXT WITH EIP-191 (personal_sign) ---")
-print(c["message"])
+print(c.message)
 print("--- END ---")
 PYEOF
 ```
 
-Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role>`
+Run as: `set -a; source .env 2>/dev/null; set +a; python3 <script> <machine-id> <agent-address> <provider> <role>`
 
 Show the challenge message to the operator. Then ask using `AskUserQuestion` free text:
 > "Sign the message above using EIP-191 personal_sign with the agent wallet. ⏱️ Expires at `<expires_at>`. Paste the 0x-prefixed signature — it is safe to paste, it is not a private key."
@@ -536,34 +568,48 @@ Show the challenge message to the operator. Then ask using `AskUserQuestion` fre
 
 ```bash
 python3 - << 'PYEOF'
-import os, sys, requests
+import os, sys
 from web3 import Web3
+from peaq_os_sdk import PeaqosClient
+from peaq_os_sdk.types.orchestration import AgentProofInput, CreateAgentPairingRequest
 
 machine_id = sys.argv[1]
 agent_addr = Web3.to_checksum_address(sys.argv[2])
 provider   = sys.argv[3]
 role       = sys.argv[4]
 signature  = sys.argv[5].replace(" ","").replace("\n","").strip()
-orch_url   = os.environ["PEAQOS_ORCHESTRATION_URL"]
-api_key    = os.environ.get("PEAQOS_ORCH_API_KEY", "")
-headers    = {"Content-Type": "application/json"}
-if api_key: headers["x-api-key"] = api_key
+
+# SDK reads PEAQOS_API_KEY; the CLI .env uses PEAQOS_ORCH_API_KEY — bridge them.
+if os.environ.get("PEAQOS_ORCH_API_KEY") and not os.environ.get("PEAQOS_API_KEY"):
+    os.environ["PEAQOS_API_KEY"] = os.environ["PEAQOS_ORCH_API_KEY"]
+# This script makes platform-auth HTTP calls only — it never signs on-chain.
+# If the .env is OWS-only (PEAQOS_OWS_WALLET, no raw key), satisfy from_env()
+# with a placeholder signing key that is never used.
+if os.environ.get("PEAQOS_OWS_WALLET") and not os.environ.get("PEAQOS_PRIVATE_KEY"):
+    os.environ["PEAQOS_PRIVATE_KEY"] = "0x" + "11" * 32
+
+orch = PeaqosClient.from_env().orchestration
 
 challenge_id = open("/tmp/challenge_id.txt").read().strip()
 
-r = requests.post(f"{orch_url}/api/v1/machines/{machine_id}/agent-pairings",
-    json={"agentAddress": agent_addr, "agentProvider": provider, "agentRole": role,
-          "agentProof": {"challengeId": challenge_id, "signature": signature}},
-    headers=headers)
-if not r.ok:
-    print(f"Error {r.status_code}: {r.text}"); sys.exit(1)
-pairing = r.json()["item"]
-print(f"pairing_id={pairing['id']}")
-print(f"pairing_token={pairing.get('pairing_token','NOT_RETURNED')}")
+pairing = orch.create_agent_pairing(
+    machine_id,
+    CreateAgentPairingRequest(
+        agent_address=agent_addr, agent_provider=provider, agent_role=role,
+        agent_proof=AgentProofInput(challenge_id=challenge_id, signature=signature)),
+).item
+
+print(f"pairing_id={pairing.id}")
+if not pairing.pairing_token:
+    print("ERROR: no pairing_token returned — do not proceed. "
+          "The pairing may exist without a usable token; check with the platform team.",
+          file=sys.stderr)
+    sys.exit(1)
+print(f"pairing_token={pairing.pairing_token}")
 PYEOF
 ```
 
-Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <agent-address> <provider> <role> <signature>`
+Run as: `set -a; source .env 2>/dev/null; set +a; python3 <script> <machine-id> <agent-address> <provider> <role> <signature>`
 
 Clean up: `rm -f /tmp/challenge_id.txt`
 
@@ -571,7 +617,7 @@ Clean up: `rm -f /tmp/challenge_id.txt`
 
 After the command completes:
 
-1. **Check whether a token was returned.** In human mode, look for the "!! Pairing token (shown once)" block in stdout. In `--json` mode, check that `pairing_token` in the JSON response is non-empty. If no token was returned (falsy or absent), the pairing may have been created without issuing a token — tell the operator and offer to re-run.
+1. **Check whether a token was returned.** The Path A/B scripts print `pairing_token=<value>` on success and exit 1 with an `ERROR:` line if the pairing was created without a token — in that case tell the operator and do not proceed (re-running would create a duplicate pairing; check with the platform team first).
 
 2. **Stop and tell the operator:** "Copy the pairing token now and save it to a file (e.g. `./pairing.token`). It cannot be recovered after this point. Confirm when saved."
 
@@ -579,10 +625,10 @@ Do not proceed until the operator confirms the token is saved.
 
 ### Outputs
 
-| Name | JSON path | Description | Used in |
-|------|-----------|-------------|---------|
-| `pairing_id` | `.id` | Agent pairing identifier | P4, P7 |
-| `pairing_token` | `.pairing_token` | Saved to file by operator | P4, P7-C, P7-D |
+| Name | Script output line | Description | Used in |
+|------|--------------------|-------------|---------|
+| `pairing_id` | `pairing_id=<value>` | Agent pairing identifier | P4, P7 |
+| `pairing_token` | `pairing_token=<value>` | Saved to file by operator | P4, P7-C, P7-D |
 
 ---
 
@@ -608,7 +654,7 @@ Full buyer flow: search → select quote → place order → confirm or dispute.
 | `--capabilities` | No | Required capabilities, comma-separated |
 | `--region` | No | Preferred region |
 | `--budget-amount` | No | Budget amount |
-| `--budget-max` | No | Maximum budget |
+| `--budget-max` | No | Maximum budget (search step only — the order command does not accept it) |
 | `--budget-currency` | No | e.g. `USD` |
 | `--native-only` | No | Restrict to native execution only |
 | `--allow-handoff` | No | Allow external handoff services |
@@ -649,10 +695,19 @@ Before placing the order, fetch the service's `OperationContract` to get the exa
 ```python
 # Save as /tmp/fetch_contract.py
 import json, os
-from peaq_os_sdk import PeaqOSClient
-from peaq_os_sdk.types.orchestration.market_service import GetMarketServiceOptions
+from peaq_os_sdk import PeaqosClient
+from peaq_os_sdk.orchestration import GetMarketServiceOptions
 
-client = PeaqOSClient()
+# SDK reads PEAQOS_API_KEY; the CLI .env uses PEAQOS_ORCH_API_KEY — bridge them.
+if os.environ.get("PEAQOS_ORCH_API_KEY") and not os.environ.get("PEAQOS_API_KEY"):
+    os.environ["PEAQOS_API_KEY"] = os.environ["PEAQOS_ORCH_API_KEY"]
+# This script makes platform-auth HTTP calls only — it never signs on-chain.
+# If the .env is OWS-only (PEAQOS_OWS_WALLET, no raw key), satisfy from_env()
+# with a placeholder signing key that is never used.
+if os.environ.get("PEAQOS_OWS_WALLET") and not os.environ.get("PEAQOS_PRIVATE_KEY"):
+    os.environ["PEAQOS_PRIVATE_KEY"] = "0x" + "11" * 32
+
+client = PeaqosClient.from_env()
 result = client.orchestration.get_market_service(
     os.environ["SERVICE_ID"],
     GetMarketServiceOptions(machine_id=os.environ.get("MACHINE_ID"))
@@ -671,7 +726,7 @@ for c in result.item.operation_contracts:
         if not os.environ.get("OPERATION"): print("---")
 ```
 
-Run as: `set -a && source .env && set +a && SERVICE_ID=<id> MACHINE_ID=<mach_id> OPERATION=<op> python3 /tmp/fetch_contract.py`
+Run as: `set -a; source .env 2>/dev/null; set +a; SERVICE_ID=<id> MACHINE_ID=<mach_id> OPERATION=<op> python3 /tmp/fetch_contract.py`
 
 Show the operator the input fields and `example_input`. Collect their values and write to `/tmp/order_input.json`, then pass as `--input /tmp/order_input.json`.
 
@@ -698,11 +753,11 @@ peaqos scale order <service-id> \
 **Payment handling** (determined from `order.payment.default_rail` after order creation, not the search quote):
 
 - **`not-required`** → 2 steps: create → execute. No payment interaction.
-- **`x402`** → 6 steps, fully automatic. CLI signs EIP-3009 `TransferWithAuthorization` locally (offline), records proof, executes, auto-confirms delivery. USDC debited at execution. **Skip Step 3 (confirm/dispute) entirely — x402 auto-confirms.** On partial failure check `.step`: `"x402 payment challenge"` → bad challenge from provider; `"x402 signing"` → check `PEAQOS_PRIVATE_KEY`.
+- **`x402`** → 6 steps, fully automatic. CLI signs EIP-3009 `TransferWithAuthorization` locally (offline), records proof, executes, auto-confirms delivery. USDC debited at execution. **Skip Step 3 (confirm/dispute) entirely — x402 auto-confirms.** On partial failure the CLI prints a text error to stderr (no JSON is emitted on errors): `Order '<id>' was created but <step> failed.` Match the step name in that text: `x402 payment challenge` → bad challenge from provider; `x402 signing` → check `PEAQOS_PRIVATE_KEY`.
 - **`wallet` / `escrow`** → 5 steps: create → intent → transfer → proof/escrow-lock → execute. OWS wallet handles EVM transfers automatically. Solana always requires manual tx hash paste.
 - **Pre-completed** → add `--payment-tx-hash <hash> --payment-chain <chain> --payment-token <token> --skip-payment`.
 
-From `--json` output, capture `.order.id` as `order_id`. **On partial failure** (order created but later step failed), the error message includes the order ID. Run `peaqos scale order status <id> --json` and branch:
+From `--json` output, capture `.order.id` as `order_id`. **On partial failure** (order created but later step failed), the CLI exits 2 with a stderr text message — `--json` applies to success output only. The message includes the order ID, current status, payment status, and the failed step name. Run `peaqos scale order status <id> --json` and branch:
 - Error code `QUOTE_EXPIRED` → order is unresumable; run a new search
 - `.payment.status` is `intent_created` or `held` and error was payment RPC error → resume with `--payment-tx-hash + --skip-payment`
 - `.order.status` is `executing` or `ready` and execution failed → retry the full `peaqos scale order <service-id>` command with the same parameters
@@ -834,16 +889,21 @@ tx = contract.functions.submitEvent(
     "gasPrice": w3.eth.gas_price,
 })
 signed  = account.sign_transaction(tx)
-tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+# eth-account >=0.11 exposes raw_transaction; 0.10 (allowed by the CLI's pin) only has rawTransaction
+raw     = getattr(signed, "raw_transaction", None) or signed.rawTransaction
+tx_hash = w3.eth.send_raw_transaction(raw)
 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-print(f"tx_hash={tx_hash.hex()} status={receipt.status}")
+h = tx_hash.hex()
+print(f"tx_hash={h if h.startswith('0x') else '0x' + h} status={receipt.status}")
 PYEOF
 ```
 
-Run as: `set -a && source .env && set +a && python3 <script> <machine-id> <event-type> <value> [currency] [timestamp]`
+Run as: `set -a; source .env 2>/dev/null; set +a; python3 <script> <machine-id> <event-type> <value> [currency] [timestamp]`
 
 Example (activity event): `... python3 <script> 284 1 0`
-Example (revenue event, USD cents): `... python3 <script> 284 2 100 USD`
+Example (revenue event, USD cents): `... python3 <script> 284 0 100 USD` (event type `0` = revenue, `1` = activity)
+
+**If the SDK fallback ALSO reverts with empty data (`data: '0x'`) on agung:** the deployed agung EventRegistry uses an older `submitEvent` signature than the SDK ships — no client-side flags will fix it. Read `knowledge/troubleshooting.md` § "Deployed EventRegistry ABI mismatch" for the confirmed diagnosis and the legacy-ABI workaround. Do not keep retrying.
 
 ### Outputs
 
@@ -888,7 +948,7 @@ peaqos show machine <machine-did> --json
 
 **C — All machines for an operator**
 
-Input: `operator_did` (from `peaqos whoami` output)
+Input: `operator_did` — derived as `did:peaq:<address>` from the `peaqos whoami` wallet address (whoami prints the address, not a DID)
 
 ```bash
 peaqos show operator machines <operator-did> --json
@@ -990,6 +1050,16 @@ python3 -c "from cryptography.hazmat.primitives.asymmetric.x25519 import X25519P
 ```
 
 `MISSING` → install: `pip install cryptography --break-system-packages`
+
+- **S3 check (A with `--s3`, and F):** boto3 ships via an optional extra, not with the base CLI:
+
+```bash
+python3 -c "import boto3; print('OK')" 2>/dev/null || echo "MISSING"
+```
+
+`MISSING` → install: `pip install 'peaq-os-cli[s3]'` — do this before running, or the command fails mid-flow with an install hint.
+
+- **Solana check (D/E with `--chain solana`):** requires the SDK's Solana extra in addition to the OWS wallet requirement: `pip install 'peaq-os-sdk[solana]'`.
 
 ### Sub-actions
 
@@ -1228,9 +1298,9 @@ Error handling:
 | `"Key commitment verification failed"` | Buyer private key doesn't match the public key used in grant | Verify the correct buyer key file |
 | `"access not granted for this buyer private key"` | Access files don't include an entry for this buyer | Re-run grant with the correct buyer public key |
 | `"Chain verification failed at chunk N: ..."` | Data integrity failure | Chunk data may be corrupted — re-download from source |
-| `"No buyer access for chunk N"` | Access files are incomplete | Re-run grant — some chunks were missed |
+| `"No buyer access for chunk N"` | Access files incomplete, **or** `--buyer-id` doesn't match the ID used in grant (non-matching entries are silently skipped) | Use the exact string passed to `grant --buyer-id`; if correct, re-run grant — some chunks were missed |
+| `"No buyer access files found in <dir>"` | Wrong `--access-dir`, or no entries at all for this buyer | Verify the directory and the `--buyer-id` value |
 | `"Missing encrypted data for chunk N"` | `.bin` file missing from `--data-dir` | Verify all `chunk-*.bin` files are present |
-| `"Buyer ID mismatch"` | `--buyer-id` doesn't match the ID in access files | Use the exact string that was passed to grant |
 
 ### Sub-action C outputs
 
@@ -1261,7 +1331,7 @@ Transfer tokens to the seller as payment for a stream order. When `--confirmatio
 | `--private-key-file` | No | Path to key file; falls back to `PEAQOS_PRIVATE_KEY` |
 | `--rpc-url` | **Yes for base/solana** | Required when `--chain` is `base` or `solana` |
 
-**Solana chains:** requires `PEAQOS_OWS_WALLET` set to an OWS wallet with a Solana account. `--private-key-file` alone is insufficient for Solana.
+**Solana chains:** requires `PEAQOS_OWS_WALLET` set to an OWS wallet with a Solana account, plus the SDK Solana extra (`pip install 'peaq-os-sdk[solana]'`). `--private-key-file` alone is insufficient for Solana.
 
 **Execute:**
 

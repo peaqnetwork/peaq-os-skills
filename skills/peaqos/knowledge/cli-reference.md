@@ -38,7 +38,7 @@ peaqos init --force            # overwrite existing .env without prompting
 **Prompts (interactive mode):**
 1. Network (`mainnet` / `testnet`)
 2. Private key source (`paste` / `generate` / `wallet`)
-3. RPC URL (default shown per network)
+3. RPC URL (mainnet: default prefilled; testnet: no default — paste the URL from `GUIDE.md`)
 4. MCR API URL
 5. Gas Station URL
 6. Event Registry address (`EVENT_REGISTRY_ADDRESS`) — the only contract address prompted interactively
@@ -550,15 +550,16 @@ peaqos scale order <service-id> \
 | `x402` | 6 | Fully automatic. CLI signs EIP-3009 `TransferWithAuthorization` locally (offline), records proof, executes, auto-confirms. USDC debited at execution. **No confirm/dispute prompt.** |
 | Pre-completed | any | Pass `--payment-tx-hash` + `--payment-chain` + `--payment-token` with `--skip-payment`. |
 
-**x402 partial failure step names** (in `--json` error `.step`): `"x402 payment challenge"` (bad challenge from provider) · `"x402 signing"` (check `PEAQOS_PRIVATE_KEY`).
+**x402 partial failure step names** (in the stderr error text — the CLI emits no JSON on errors; the message reads `Order '<id>' was created but <step> failed.`): `x402 payment challenge` (bad challenge from provider) · `x402 signing` (check `PEAQOS_PRIVATE_KEY`).
 
 **Fetch operation contract before placing order** — the CLI's example-input tip is skipped under `--json`/`--yes`. Use the SDK to get `OperationContract.example_input` first:
 
 ```bash
-# Save as /tmp/fetch_contract.py, run before order placement
-SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> \
-  set -a && source .env && set +a && \
-  python3 /tmp/fetch_contract.py
+# Save as /tmp/fetch_contract.py, run before order placement.
+# Source .env first (the SDK's from_env() does not load .env itself),
+# then pass the selection as env vars on the python invocation:
+set -a; source .env 2>/dev/null; set +a; \
+  SERVICE_ID=<id> MACHINE_ID=<id> OPERATION=<op> python3 /tmp/fetch_contract.py
 ```
 
 See `knowledge/concepts.md#operationcontract` for the full script.
@@ -852,8 +853,8 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_PRIVATE_KEY` | Yes (all commands that load the client, if not using OWS) | Operator private key (0x-prefixed hex). Required for read-only commands too (e.g. `whoami`, `qualify mcr`) — the client always resolves a signing key. |
 | `PEAQOS_OWS_WALLET` | Yes (all commands, if not using raw key) | OWS wallet name — alternative to `PEAQOS_PRIVATE_KEY` |
 | `OWS_PASSPHRASE` | No | Vault passphrase for OWS wallets; prompted interactively if absent |
-| `PEAQOS_NETWORK` | Yes | `mainnet` or `testnet` |
-| `PEAQOS_RPC_URL` | No | Override RPC endpoint |
+| `PEAQOS_NETWORK` | No | `mainnet` or `testnet`. Informational at runtime — defaults to `mainnet` where it matters (e.g. gas-station chain selection); `whoami` shows `unknown` if unset. Always set it to avoid ambiguity. |
+| `PEAQOS_RPC_URL` | Yes | RPC endpoint. Required by every command that loads the client — there is no built-in runtime default (exit 3 if missing). |
 | `PEAQOS_GAS_STATION_URL` | No | Gas station URL (not needed with `--skip-funding`) |
 | `PEAQOS_MCR_API_URL` | No | Override MCR API URL |
 | `PEAQOS_ORCHESTRATION_URL` | Yes (Scale commands) | Base URL of the Machine Markets API |

@@ -22,9 +22,10 @@
   ],
   "cli_dependency": {
     "package": "peaq-os-cli",
-    "pypi": false,
+    "pypi": true,
+    "install": "pip install peaq-os-cli",
     "install_from_source": "https://github.com/peaqnetwork/peaq-os-cli-py",
-    "python_min": "3.10"
+    "python_min": "3.11"
   },
   "keywords": [
     "peaq", "peaqos", "peaqid", "mcr", "depin", "machine-economy",
