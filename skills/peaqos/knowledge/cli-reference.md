@@ -350,6 +350,136 @@ Output: tabular list of `peaqID`, `Machine ID`, `MCR score`, `Rating`.
 
 ---
 
+## `peaqos stream`
+
+Data-stream commands (CLI 0.0.5+; `distribute`/`pay`/`payproof` and `consume --download-url` require **0.0.6+**). A machine's data is chunked, encrypted per chunk (XChaCha20-Poly1305), and signed as a chain (Ed25519); buyers get the chunk keys re-wrapped to their X25519 public key. The crypto commands (`publish`, `grant`, `consume` in local mode) need no wallet and write nothing on-chain — their only network I/O is `publish --input <url>` downloads and the optional `publish --s3` upload. The paid-flow commands (`distribute`, `pay`, `payproof`) talk to HTTP endpoints and chains.
+
+**Key files:** **private** keys are passed as **file paths**, never inline — 64 hex chars (optional `0x` prefix), one per line, `chmod 600`. X25519 **public** keys are shared openly and passed inline as flags (`--owner-public-key`, `--buyer-public-key`, …).
+
+### `peaqos stream publish`
+
+Seller: chunk, encrypt, and sign a data file into an output directory. Writes `chunk-<i>.json` (envelope) + `chunk-<i>.bin` (ciphertext) per chunk plus a `manifest.json` (`peaq.stream.chunks.v1`).
+
+```bash
+peaqos stream publish \
+  --input ./telemetry.bin \
+  --output-dir ./out \
+  --owner-public-key 0x<64hex> \
+  --operator-public-key 0x<64hex> \
+  --machine-public-key 0x<64hex> \
+  --signing-key-file ./machine-ed25519.key \
+  --machine-did did:peaq:0x<40hex> \
+  --machine-key-id "did:peaq:0x<40hex>#keys-1"
+```
+
+**Required:** `--input` (file path or http(s) URL), `--output-dir`, the three X25519 recipient public keys (owner/operator/machine), `--signing-key-file` (Ed25519 private key file), `--machine-did`, `--machine-key-id`.
+
+**Optional:** `--chunk-size` (bytes, default `262144`), `--json`, and S3 upload: `--s3 s3://bucket/prefix/`, `--s3-region`, `--s3-endpoint` (MinIO/R2). S3 needs `pip install "peaq-os-cli[s3]"` plus `PEAQOS_S3_ACCESS_KEY_ID` / `PEAQOS_S3_SECRET_ACCESS_KEY` (or the boto3 chain).
+
+**Exit codes:** 0 success · 1 validation (bad key hex, missing input) · 2 URL download or S3 upload failure
+
+### `peaqos stream grant`
+
+Seller: re-wrap the chunk keys for one buyer — fully offline, a local re-key, not an on-chain grant. Writes `peaq.stream.buyer-access.v1` files.
+
+```bash
+peaqos stream grant \
+  --chunk-dir ./out \
+  --buyer-public-key 0x<64hex> \
+  --buyer-id did:peaq:0x<buyer> \
+  --owner-private-key-file ./owner-x25519.key \
+  --output-dir ./buyer-access
+```
+
+**Optional:** `--max-file-size` (bytes per access file, default `512000`), `--json`.
+
+**Exit codes:** 0 success · 1 validation · 2 key-commitment mismatch (**wrong owner key** — the most common failure)
+
+### `peaqos stream consume`
+
+Buyer: verify, decrypt, and reassemble purchased data. Two input modes:
+
+```bash
+# Local mode — offline
+peaqos stream consume \
+  --chunk-dir ./out --access-dir ./buyer-access --data-dir ./out \
+  --buyer-private-key-file ./buyer-x25519.key \
+  --buyer-id did:peaq:0x<buyer> \
+  --output ./recovered.bin
+
+# Remote mode (0.0.6+) — fetch a self-contained release bundle
+peaqos stream consume \
+  --download-url "https://bundles.example.com/releases/ord-001/" \
+  --buyer-private-key-file ./buyer-x25519.key \
+  --buyer-id did:peaq:0x<buyer> \
+  --output ./recovered.bin
+```
+
+- `--download-url` is **mutually exclusive** with `--chunk-dir`/`--access-dir`/`--data-dir`. The URL must serve a **self-contained release package** — chunk envelopes + `.bin` blobs + access files — as a `manifest.json` file listing or a ZIP archive.
+- ⚠️ `--download-url` does **not** accept the pre-signed URL printed by `peaqos stream distribute` — that URL delivers only the first buyer-access file. A full distribute→consume roundtrip needs a self-hosted bundle.
+- Optional: `--work-dir` / `--keep-files` (remote mode), `--skip-verify` (debugging only), `--json`.
+
+**Exit codes:** 0 success · 1 validation (missing dirs, `--download-url` combined with a dir flag) · 2 decryption/integrity/download failure. Error messages are specific: `access not granted for this buyer private key` = wrong buyer key; `No buyer access for chunk N` = `--buyer-id` doesn't match the access files.
+
+### `peaqos stream distribute` (0.0.6+)
+
+Seller: wait for a buyer's payment confirmation, then auto-generate access files (same re-key as `grant`) and deliver them to S3, returning a pre-signed download URL (for the first access file). Polls `--confirmation-url` every `--poll-interval`s (default 30) until confirmed or `--timeout`s (default 3600). The endpoint must return JSON with `status`, `buyer_id`, `buyer_public_key_hex`.
+
+```bash
+peaqos stream distribute \
+  --chunk-dir ./out \
+  --owner-private-key-file ./owner-x25519.key \
+  --confirmation-url https://api.example.com/orders/ord-001/status \
+  --order-id ord-001 \
+  --delivery s3 \
+  --s3 s3://my-bucket/distributes/
+```
+
+**Required:** `--chunk-dir`, `--owner-private-key-file`, `--confirmation-url`, `--order-id`, `--delivery` (**only `s3`** — the SDK's P2P delivery channel has no CLI flag), `--s3`.
+
+**Optional:** `--poll-interval`, `--timeout`, `--s3-region`, `--s3-endpoint`, `--presign-expiry` (default 3600), `--max-file-size`, `--json`.
+
+**Exit codes:** 0 success · 1 validation · 2 confirmation timeout or S3 failure · 3 `boto3` missing (`pip install "peaq-os-cli[s3]"`)
+
+### `peaqos stream pay` (0.0.6+)
+
+Buyer: transfer tokens on-chain to the seller — native or ERC-20/SPL on `peaq`, `base`, or `solana` — and optionally submit the tx hash as proof in the same run. Without `--confirmation-url`, only the transfer runs and the CLI prints the matching `payproof` command. The tx hash always prints before the proof step, so it survives a failed proof.
+
+```bash
+peaqos stream pay \
+  --seller-address 0x<seller> \
+  --amount 1.0 \
+  --chain base \
+  --order-id order-002 \
+  --rpc-url https://mainnet.base.org \
+  --token-address 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --confirmation-url https://api.example.com/payments/proof
+```
+
+**Required:** `--seller-address` (EVM `0x…` or Solana base58), `--amount` (human-readable), `--chain`, `--order-id`.
+
+**Optional:** `--confirmation-url`, `--token-address` (omit for native token), `--token-decimals`, `--rpc-url` (**required** for `base` and `solana`), `--private-key-file` (falls back to `PEAQOS_PRIVATE_KEY`), `--json`.
+
+Solana support needs `pip install "peaq-os-sdk[solana]"`.
+
+**Exit codes:** 0 success · 1 validation/signing (never leaks key material) · 2 insufficient balance, revert, or proof HTTP failure · 3 config
+
+### `peaqos stream payproof` (0.0.6+)
+
+Buyer: submit proof for a transfer done outside `stream pay`, or retry a failed proof step.
+
+```bash
+peaqos stream payproof \
+  --tx-hash 0x<hash> --order-id order-001 \
+  --confirmation-url https://api.example.com/payments/proof \
+  --chain peaq --payer-address 0x<payer> --payee-address 0x<seller> \
+  --amount 10.5
+```
+
+**Required:** `--tx-hash`, `--order-id`, `--confirmation-url`, `--chain`, `--payer-address`, `--payee-address`, `--amount` (must match the transfer). **Optional:** `--token`, `--token-address`, `--json`.
+
+---
+
 ## `peaqos scale`
 
 Machine Market orchestration commands. All `scale` subcommands require `PEAQOS_ORCHESTRATION_URL`. `PEAQOS_ORCH_API_KEY` is optional — only needed if the deployment requires platform API key auth.
@@ -542,6 +672,9 @@ peaqos scale order <service-id> \
 - **No payment required**: 2-step create → execute
 - **Wallet payment (EVM)**: 5-step create → intent → send → proof/escrow → execute. OWS wallets handle EVM transfers automatically.
 - **Pre-completed**: pass `--payment-tx-hash` + `--payment-chain` + `--payment-token` with `--skip-payment`
+- **x402 (CLI 0.0.6+)**: 6-step create → intent → sign → proof → execute → confirm, used by paid-HTTP Agentic Market providers (e.g. Wolfram Alpha over USDC on Base). The CLI signs the provider's payment challenge **locally** with the active wallet (OWS wallet when `PEAQOS_OWS_WALLET` is set, otherwise the local key) and hands the signed `PAYMENT-SIGNATURE` header to peaqOS, which pays the provider during execute. **No separate on-chain transfer and no tx-hash prompt**; delivery is confirmed automatically in step 6. If execution fails after proof is recorded, the error shows the current payment status — run `peaqos scale order status <id>` to check whether the authorization is held.
+
+Set `PEAQOS_ORDER_STEP_DELAY_SEC` to pause between placement steps (demos, eventually-consistent state); unset = no delay.
 
 **Exit codes:** 0 success · 1 validation error · 2 API/payment error · 3 config error
 
@@ -607,6 +740,11 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_MCR_API_URL` | No | Override MCR API URL |
 | `PEAQOS_ORCHESTRATION_URL` | Yes (Scale commands) | Base URL of the Machine Markets API |
 | `PEAQOS_ORCH_API_KEY` | No (Scale commands) | Platform API key for orchestration — optional, only required if deployment enforces API key auth |
+| `PEAQOS_S3_ACCESS_KEY_ID` | No (`stream publish --s3` / `stream distribute`) | S3 credentials; the standard boto3 chain works too |
+| `PEAQOS_S3_SECRET_ACCESS_KEY` | No | Paired with the above |
+| `PEAQOS_S3_REGION` | No | Default S3 region for stream uploads (overridden by `--s3-region`) |
+| `PEAQOS_S3_ENDPOINT` | No | Default custom S3-compatible endpoint URL (overridden by `--s3-endpoint`) |
+| `PEAQOS_ORDER_STEP_DELAY_SEC` | No | Seconds to pause between `scale order` placement steps (unset = no delay) |
 | `IDENTITY_REGISTRY_ADDRESS` | Yes | IdentityRegistry contract |
 | `IDENTITY_STAKING_ADDRESS` | Yes | IdentityStaking contract |
 | `EVENT_REGISTRY_ADDRESS` | Yes | EventRegistry contract |

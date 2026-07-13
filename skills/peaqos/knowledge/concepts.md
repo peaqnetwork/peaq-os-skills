@@ -190,3 +190,39 @@ After execution, the buyer confirms or disputes:
 - `peaqos scale order dispute --reason "..."`: flags a problem, freezes payment pending resolution
 
 **Plain English:** Like accepting or rejecting a delivery. Confirm if the service did what it promised; dispute if it didn't.
+
+---
+
+## Stream (Data Sales)
+
+Stream is the *data* side of the machine economy: a machine signs the data it produces, encrypts it, and sells access. Where Scale lets a machine **buy services**, Stream lets it **sell data**.
+
+**Plain English:** The machine's sensor output becomes a product. Buyers can verify the data really came from that machine before paying, and they can only decrypt what they've been granted.
+
+---
+
+## Chunks and Chunk Chains
+
+Data is split into bounded **chunks** — each encrypted under its own fresh key (XChaCha20-Poly1305) and linked to the previous chunk, forming a tamper-evident **chain** signed with one Ed25519 key. Reordering, gaps, or edits are detectable. A chunk is the unit of access: the CLI's `stream grant` re-wraps the whole published chain for a buyer, while per-chunk selection exists in the SDK purchases flow.
+
+---
+
+## Access Grants (Envelope Encryption)
+
+Each chunk key is wrapped separately to each authorized recipient's X25519 public key (owner, operator, machine — and later, buyers). Granting a buyer access (`peaqos stream grant` or `distribute`) re-wraps the purchased chunk keys to the buyer's key. **The data itself is never re-encrypted and no master key is ever shared.**
+
+**Plain English:** Like a locked box where each authorized person gets their own copy of the key, sealed in an envelope only they can open.
+
+---
+
+## Stream Payment and Delivery
+
+The buyer pays on-chain (`peaqos stream pay` — peaq, Base, or Solana) and submits the tx hash as proof; the seller waits for confirmation and delivers access files (`peaqos stream distribute`, S3 delivery). At the SDK level there is also a machine-to-machine **P2P delivery channel** (`peaqos-p2p` transport) that streams encrypted chunks directly between seller and buyer — SDK-only for now, no CLI flag.
+
+---
+
+## x402 Payment Rail
+
+x402 is a web payment standard built on HTTP 402 ("payment required"): the provider answers with exact payment instructions, and the buyer's wallet **signs an authorization** instead of sending its own on-chain transfer. peaqOS settles with the provider during execution. Used by Agentic Market paid-HTTP services on `peaqos scale order` (CLI 0.0.6+).
+
+**Plain English:** Instead of wiring money and showing the receipt, the agent signs a one-time payment authorization and the platform handles the rest.
