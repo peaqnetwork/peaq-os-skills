@@ -292,3 +292,55 @@ If you installed from source, pull the latest and reinstall with `pip install -e
 **Symptom:** Exit 2 — `ORDER_CLOSED`
 **Cause:** Attempted to execute, confirm, or dispute an order that is already in a terminal state.
 **Fix:** Check the current status with `peaqos scale order status <order-id>`. Terminal states: `closed`, `cancelled`, `disputed`.
+
+---
+
+## Phase: Stream (exit 1, 2, or 3)
+
+**Symptom:** `peaqos stream --help` fails / `No such command 'stream'`
+**Cause:** Installed CLI predates the stream group (needs 0.0.5+; `distribute`/`pay`/`payproof`/`--download-url` need 0.0.6+).
+**Fix:** `pip install --upgrade peaq-os-cli`, then `peaqos --version` to confirm.
+
+**Symptom:** Exit 2 on `stream grant` or `stream distribute` — key-commitment mismatch
+**Cause:** Wrong owner X25519 private key — it doesn't match the owner public key used at publish time. The most common Stream failure.
+**Fix:** Use the exact owner key file from `stream publish`. There is no recovery with a different key.
+
+**Symptom:** `stream consume` — `Decryption failed for chunk N — access not granted for this buyer private key`
+**Cause:** The buyer's private key doesn't match the public key the seller granted to.
+**Fix:** Confirm the buyer gave the seller the right public key, and is using the matching private key file.
+
+**Symptom:** `stream consume` — `No buyer access for chunk N (<chunk-id>)`
+**Cause:** `--buyer-id` doesn't match the `recipientId` in the access files.
+**Fix:** Use the exact buyer ID string the seller passed to `stream grant --buyer-id` / that the confirmation endpoint reported.
+
+**Symptom:** `stream consume` — `Data integrity check failed for chunk N — plaintext hash mismatch`
+**Cause:** The encrypted data was tampered with or corrupted in transit/storage.
+**Fix:** Do not trust the output. Re-download the chunks; if it persists, the source data is bad — contact the seller.
+
+**Symptom:** Exit 1 — `--download-url is mutually exclusive with --chunk-dir, --access-dir, and --data-dir`
+**Cause:** Mixed remote and local input modes.
+**Fix:** Use either `--download-url` alone or all three directory flags.
+
+**Symptom:** `consume --download-url` fails against the URL printed by `stream distribute`
+**Cause:** Expected — the distribute pre-signed URL carries only the buyer-access files, not the envelopes/ciphertext.
+**Fix:** Point `--download-url` at a self-contained bundle (envelopes + `.bin` + access files via `manifest.json` or ZIP), or use local mode with separately downloaded files.
+
+**Symptom:** Exit 3 — `boto3 is required for S3 delivery but is not installed`
+**Cause:** S3 extra missing.
+**Fix:** `pip install "peaq-os-cli[s3]"` and set `PEAQOS_S3_ACCESS_KEY_ID` / `PEAQOS_S3_SECRET_ACCESS_KEY`.
+
+**Symptom:** Exit 2 — `Payment confirmation timed out after Ns for order <id>`
+**Cause:** `stream distribute` never saw `status: confirmed` from the confirmation endpoint within `--timeout`.
+**Fix:** Verify the endpoint URL returns JSON with `status`, `buyer_id`, `buyer_public_key_hex`; check the buyer actually paid (`stream pay` / `payproof`); re-run with a longer `--timeout`.
+
+**Symptom:** `stream pay --chain solana` — missing dependency error
+**Cause:** Solana extra not installed.
+**Fix:** `pip install "peaq-os-sdk[solana]"`. Also pass `--rpc-url` (required for solana and base).
+
+**Symptom:** `stream pay` transfer succeeded but proof submission failed
+**Cause:** Confirmation endpoint unreachable or rejected the proof.
+**Fix:** Do NOT pay again — the tx hash was already printed to stdout. Resubmit with `peaqos stream payproof --tx-hash <hash> ...`.
+
+**Symptom:** `scale order` with an x402 service fails after `[4/6] Recording payment proof`
+**Cause:** Execution failed after the signed authorization was recorded.
+**Fix:** Run `peaqos scale order status <order-id>` — the error message includes the payment status. If the authorization is `held`, retry execution rather than re-paying.

@@ -13,8 +13,9 @@ Invoke `/peaqos` in Claude Code and the skill will:
 - **Demo mode** — walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
 - **Real onboarding** — ask five questions about your machine and deployment, recommend the right architecture (self-managed or proxy-managed), then execute the CLI commands to register, mint, and verify
 - **Fleet management** — check MCR scores, list all machines for an operator, find machines with low or no rating, submit heartbeat events
-- **Scale / Machine Market** — register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery)
-- **Troubleshooting** — diagnose common failures (funding, activation errors, MCR lag, key mismatches, Scale auth) and walk you through the fix
+- **Scale / Machine Market** — register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery), including x402 pay-per-request services (CLI 0.0.6+)
+- **Stream / data sales** — package machine data into signed, encrypted chunks, grant or auto-deliver buyer access after payment, and pay for / decrypt purchased data (CLI 0.0.5+, paid flows 0.0.6+)
+- **Troubleshooting** — diagnose common failures (funding, activation errors, MCR lag, key mismatches, Scale auth, Stream key/decryption errors) and walk you through the fix
 
 Adapts its language to your background: concise and direct for developers, plain English with narrated steps for hobbyists and first-timers.
 
@@ -93,6 +94,12 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 | Confirm order delivery | `peaqos scale order received <order-id> --pairing-token-file ./pairing.token` |
 | Dispute an order | `peaqos scale order dispute <order-id> --reason "<reason>" --pairing-token-file ./pairing.token` |
 | List orders for a machine | `peaqos scale order list --machine-id mach_<id>` |
+| Package data for sale | `peaqos stream publish --input <file> --output-dir ./out --owner-public-key 0x<64hex> --operator-public-key 0x<64hex> --machine-public-key 0x<64hex> --signing-key-file ./ed25519.key --machine-did did:peaq:0x<addr> --machine-key-id "did:peaq:0x<addr>#keys-1"` |
+| Grant a buyer access | `peaqos stream grant --chunk-dir ./out --buyer-public-key 0x<64hex> --buyer-id <buyer-did> --owner-private-key-file ./owner.key --output-dir ./buyer-access` |
+| Auto-deliver after payment | `peaqos stream distribute --chunk-dir ./out --owner-private-key-file ./owner.key --confirmation-url <url> --order-id <id> --delivery s3 --s3 s3://bucket/prefix/` |
+| Pay for data | `peaqos stream pay --seller-address <addr> --amount <amt> --chain <peaq\|base\|solana> --order-id <id>` |
+| Submit payment proof | `peaqos stream payproof --tx-hash <hash> --order-id <id> --confirmation-url <url> --chain <chain> --payer-address <buyer> --payee-address <seller> --amount <amt>` |
+| Decrypt purchased data | `peaqos stream consume --chunk-dir ./out --access-dir ./buyer-access --data-dir ./out --buyer-private-key-file ./buyer.key --buyer-id <buyer-did> --output ./recovered.bin` |
 
 ---
 
@@ -100,7 +107,7 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 
 ```
 peaqos-skill/
-├── AGENT-PROMPT.md               # Framework-agnostic orchestration (9-phase logic, routing, security)
+├── AGENT-PROMPT.md               # Framework-agnostic orchestration (10-phase logic, routing, security)
 ├── manifest.json                 # Metadata, capability requirements, adapter list
 ├── GUIDE.md                      # Portable operator manual — full CLI recipes incl. Scale
 ├── knowledge/
