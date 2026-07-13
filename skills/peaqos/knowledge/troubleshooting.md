@@ -317,15 +317,15 @@ If you installed from source, pull the latest and reinstall with `pip install -e
 **Cause:** The encrypted data was tampered with or corrupted in transit/storage.
 **Fix:** Do not trust the output. Re-download the chunks; if it persists, the source data is bad — contact the seller.
 
-**Symptom:** Exit 1 — `--download-url is mutually exclusive with --chunk-dir, --access-dir, and --data-dir`
+**Symptom:** Exit 1 — `--download-url is mutually exclusive with --chunk-dir, --access-dir, and --data-dir.`
 **Cause:** Mixed remote and local input modes.
 **Fix:** Use either `--download-url` alone or all three directory flags.
 
 **Symptom:** `consume --download-url` fails against the URL printed by `stream distribute`
-**Cause:** Expected — the distribute pre-signed URL carries only the buyer-access files, not the envelopes/ciphertext.
+**Cause:** Expected — the distribute pre-signed URL carries only the first buyer-access file, not the envelopes/ciphertext.
 **Fix:** Point `--download-url` at a self-contained bundle (envelopes + `.bin` + access files via `manifest.json` or ZIP), or use local mode with separately downloaded files.
 
-**Symptom:** Exit 3 — `boto3 is required for S3 delivery but is not installed`
+**Symptom:** Exit 3 — `boto3 is required for S3 delivery but is not installed — install with: pip install boto3`
 **Cause:** S3 extra missing.
 **Fix:** `pip install "peaq-os-cli[s3]"` and set `PEAQOS_S3_ACCESS_KEY_ID` / `PEAQOS_S3_SECRET_ACCESS_KEY`.
 
@@ -343,4 +343,4 @@ If you installed from source, pull the latest and reinstall with `pip install -e
 
 **Symptom:** `scale order` with an x402 service fails after `[4/6] Recording payment proof`
 **Cause:** Execution failed after the signed authorization was recorded.
-**Fix:** Run `peaqos scale order status <order-id>` — the error message includes the payment status. If the authorization is `held`, retry execution rather than re-paying.
+**Fix:** Run `peaqos scale order status <order-id>` — the error message includes the payment status. Do **not** re-pay: if the authorization shows `held`, the payment is already committed; check with the platform/provider before any retry.

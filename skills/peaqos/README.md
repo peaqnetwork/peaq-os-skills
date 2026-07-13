@@ -25,7 +25,7 @@ Adapts its language to your background: concise and direct for developers, plain
 
 - **Python ≥ 3.10**
 - **`peaq-os-cli`** installed (see below)
-- A wallet private key (the skill can generate one for you if needed)
+- A wallet private key (the skill can generate one for you if needed) — not needed for the offline Stream crypto commands (`stream publish`/`grant`/`consume` in local mode)
 - For mainnet: PEAQ tokens to cover gas (the gas station handles this automatically)
 - For testnet: nothing — the skill walks you through the agung faucet
 
@@ -97,7 +97,7 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 | Package data for sale | `peaqos stream publish --input <file> --output-dir ./out --owner-public-key 0x<64hex> --operator-public-key 0x<64hex> --machine-public-key 0x<64hex> --signing-key-file ./ed25519.key --machine-did did:peaq:0x<addr> --machine-key-id "did:peaq:0x<addr>#keys-1"` |
 | Grant a buyer access | `peaqos stream grant --chunk-dir ./out --buyer-public-key 0x<64hex> --buyer-id <buyer-did> --owner-private-key-file ./owner.key --output-dir ./buyer-access` |
 | Auto-deliver after payment | `peaqos stream distribute --chunk-dir ./out --owner-private-key-file ./owner.key --confirmation-url <url> --order-id <id> --delivery s3 --s3 s3://bucket/prefix/` |
-| Pay for data | `peaqos stream pay --seller-address <addr> --amount <amt> --chain <peaq\|base\|solana> --order-id <id>` |
+| Pay for data | `peaqos stream pay --seller-address <addr> --amount <amt> --chain <peaq\|base\|solana> --order-id <id>` (add `--rpc-url <url>` — required for `base` and `solana`) |
 | Submit payment proof | `peaqos stream payproof --tx-hash <hash> --order-id <id> --confirmation-url <url> --chain <chain> --payer-address <buyer> --payee-address <seller> --amount <amt>` |
 | Decrypt purchased data | `peaqos stream consume --chunk-dir ./out --access-dir ./buyer-access --data-dir ./out --buyer-private-key-file ./buyer.key --buyer-id <buyer-did> --output ./recovered.bin` |
 
@@ -108,13 +108,15 @@ These are the underlying `peaqos` commands the skill drives. You can also run th
 ```
 peaqos-skill/
 ├── AGENT-PROMPT.md               # Framework-agnostic orchestration (10-phase logic, routing, security)
+├── SKILL.md                      # Root skill entry (mirrors the Claude Code adapter)
+├── TESTING.md                    # Manual test plan
 ├── manifest.json                 # Metadata, capability requirements, adapter list
-├── GUIDE.md                      # Portable operator manual — full CLI recipes incl. Scale
+├── GUIDE.md                      # Portable operator manual — full CLI recipes incl. Scale & Stream
 ├── knowledge/
 │   ├── decision-tree.md          # Architecture questionnaire & recommendation matrix
-│   ├── concepts.md               # peaqID, MCR, trust levels, bond, visibility, Scale concepts
-│   ├── cli-reference.md          # Every command, flag, env var, exit code (incl. `peaqos scale`)
-│   └── troubleshooting.md        # Symptom → cause → fix (incl. Scale auth & pairing)
+│   ├── concepts.md               # peaqID, MCR, trust levels, bond, visibility, Scale & Stream concepts
+│   ├── cli-reference.md          # Every command, flag, env var, exit code (incl. `peaqos scale` & `peaqos stream`)
+│   └── troubleshooting.md        # Symptom → cause → fix (incl. Scale auth & pairing, Stream keys & payment)
 ├── adapters/
 │   ├── claude-code/
 │   │   └── SKILL.md              # Claude Code adapter (thin wrapper over AGENT-PROMPT.md)

@@ -197,13 +197,13 @@ After execution, the buyer confirms or disputes:
 
 Stream is the *data* side of the machine economy: a machine signs the data it produces, encrypts it, and sells access. Where Scale lets a machine **buy services**, Stream lets it **sell data**.
 
-**Plain English:** The machine's sensor output becomes a product. Buyers can verify the data really came from that machine before paying, and they can only read the exact slices they paid for.
+**Plain English:** The machine's sensor output becomes a product. Buyers can verify the data really came from that machine before paying, and they can only decrypt what they've been granted.
 
 ---
 
 ## Chunks and Chunk Chains
 
-Data is split into bounded **chunks** — each encrypted under its own fresh key (XChaCha20-Poly1305) and linked to the previous chunk, forming a tamper-evident **chain** signed with one Ed25519 key. Reordering, gaps, or edits are detectable. A chunk is the unit a buyer purchases.
+Data is split into bounded **chunks** — each encrypted under its own fresh key (XChaCha20-Poly1305) and linked to the previous chunk, forming a tamper-evident **chain** signed with one Ed25519 key. Reordering, gaps, or edits are detectable. A chunk is the unit of access: the CLI's `stream grant` re-wraps the whole published chain for a buyer, while per-chunk selection exists in the SDK purchases flow.
 
 ---
 

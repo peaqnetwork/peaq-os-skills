@@ -536,13 +536,13 @@ Payment handling:
 - **No payment required**: CLI proceeds directly to execution (2-step flow)
 - **Wallet payment**: CLI creates a payment intent, sends the transfer, submits proof, then executes (5-step flow). OWS wallets handle EVM payments automatically.
 - **Pre-completed payment**: pass `--payment-tx-hash`, `--payment-chain`, `--payment-token` with `--skip-payment` if payment was handled externally
-- **x402 (CLI 0.0.6+)**: for paid-HTTP Agentic Market services (e.g. Wolfram Alpha over USDC on Base) the CLI runs a 6-step flow — create → intent → sign → proof → execute → confirm. It signs the provider's payment challenge locally with the active wallet and there is **no separate on-chain transfer and no tx-hash prompt**; delivery confirms automatically. Tell the user the quoted amount before they approve the confirmation prompt. If execution fails after the proof step, run `peaqos scale order status <order-id>` to check whether the payment authorization is held.
+- **x402 (CLI 0.0.6+)**: for paid-HTTP Agentic Market services (e.g. Wolfram Alpha over USDC on Base) the CLI runs a 6-step flow — create → intent → sign → proof → execute → confirm. It signs the provider's payment challenge locally with the active wallet and there is **no separate on-chain transfer and no tx-hash prompt**; delivery confirms automatically at step 6. Timing caveat: the CLI's confirmation prompt appears after order creation but **before the exact amount is displayed** (the amount only prints at step 2, payment intent) — so surface the expected price from the search quote *before* placing the order; once the user approves, signing and payment proceed with no further prompt. If execution fails after the proof step, run `peaqos scale order status <order-id>` and check whether the payment authorization is held — do **not** re-pay; consult the platform before any retry.
 
 Capture `order_id` from output.
 
 **Step 4 — Confirm or dispute**
 
-Once the order executes, ask the user:
+**x402 orders skip this step** — they are confirmed automatically at placement (step 6). Running `order received` on them fails with `ORDER_CLOSED`, and a dispute is no longer available once an order is confirmed, so review x402 results carefully before choosing that provider again. For all other rails, once the order executes, ask the user:
 - Happy with the result? → confirm delivery with `peaqos scale order received <order-id> --pairing-token-file ./pairing.token`
 - Problem with the result? → raise a dispute with `peaqos scale order dispute <order-id> --reason "<reason>" --pairing-token-file ./pairing.token`
 
@@ -596,9 +596,31 @@ peaqos --version
 ```
 
 - `STREAM_MISSING` → upgrade: `pip install --upgrade peaq-os-cli` (stream group needs 0.0.5+; `distribute`/`pay`/`payproof` and `consume --download-url` need **0.0.6+**). Do not proceed until `peaqos stream --help` exits 0.
-- No `.env`/config needed for the offline commands (`publish`, `grant`, local `consume`) — they run without a wallet or RPC.
+- If `peaqos --version` shows **0.0.5**, T1/T2 and local-mode T5 work, but T3, T4, and `consume --download-url` do not exist — offer `pip install --upgrade peaq-os-cli` before routing to those flows.
+- No `.env`/config needed for the local crypto commands (`publish` with a local file, `grant`, local-mode `consume`) — they run without a wallet or RPC. Network is used only by `publish --input <url>`, `publish --s3`, and the paid-flow commands.
 
-**Key handling (enforce like the private-key rule):** Stream uses X25519 key pairs (encryption) and an Ed25519 key (chain signing), always passed as **file paths**, never pasted in chat. If the user has no keys yet, generate them to files with `chmod 600` and tell the user to back them up — a seller's owner X25519 private key is the only thing that can grant buyer access; a buyer's X25519 private key is the only thing that can decrypt.
+Read `GUIDE.md#stream` for copy-paste recipes throughout this phase.
+
+**Key handling:** Stream uses X25519 key pairs (encryption) and an Ed25519 key (chain signing). **Private keys are file-path-only** — never pasted in chat, never inline on the command line; the global private-key refusal rule applies to them and to mnemonics. **X25519 *public* keys are safe to share** and are passed inline as flags (`--owner-public-key`, `--buyer-public-key`, …) — a pasted 64-hex *public* key is fine and must not trigger the refusal (when unsure, ask which it is rather than refusing). Never invent key IDs, DIDs, or buyer IDs — ask the user.
+
+If the user has no keys yet, generate them with PyNaCl (installed with the CLI), writing private keys to `chmod 600` files and printing only the public halves:
+
+```bash
+python3 - <<'PY'
+import os
+from nacl.public import PrivateKey
+from nacl.signing import SigningKey
+xk = PrivateKey.generate()
+with open("owner-x25519.key", "w") as f: f.write(bytes(xk).hex())
+os.chmod("owner-x25519.key", 0o600)
+print("X25519 public key:", bytes(xk.public_key).hex())
+sk = SigningKey.generate()
+with open("machine-ed25519.key", "w") as f: f.write(bytes(sk).hex())
+os.chmod("machine-ed25519.key", 0o600)
+PY
+```
+
+(One X25519 pair per role — owner, operator, machine, buyer. If `publish` rejects the Ed25519 key file, check the "Key file format" note in the CLI README.) Tell the user to back the key files up: a seller's owner X25519 private key is the only thing that can grant buyer access; a buyer's X25519 private key is the only thing that can decrypt. Neither is recoverable.
 
 Ask the user: "What would you like to do with Stream?" Wait for their response. Options:
 - T1: Sell — package data for sale (publish)
@@ -613,7 +635,7 @@ Routing: T1 → publish flow · T2 → grant flow · T3 → distribute flow · T
 
 ### T1 — Publish (seller)
 
-Collect: the input file (or http(s) URL), an output directory, the three X25519 **public** keys (owner, operator, machine), the Ed25519 signing key file, and the machine DID + key ID (`did:peaq:0x…` / `…#keys-1`).
+Collect: the input file (or http(s) URL), an output directory, the three X25519 **public** keys (owner, operator, machine), the Ed25519 signing key file, and the machine DID + key ID (`did:peaq:0x…` / `…#keys-1` — ask the user for both; never invent them).
 
 ```
 peaqos stream publish \
@@ -657,13 +679,16 @@ peaqos stream distribute \
 Notes to surface:
 - `--delivery` supports **only `s3`** today; the SDK's machine-to-machine P2P delivery channel has no CLI flag.
 - The command blocks, polling every 30s for up to 1h by default (`--poll-interval` / `--timeout`).
-- ⚠️ The printed pre-signed URL delivers the **access files only** — buyers cannot feed it to `consume --download-url` directly. To hand a buyer a one-URL package, host a self-contained bundle (envelopes + `.bin` + access files, via `manifest.json` or ZIP).
+- Only point `--confirmation-url` at an HTTPS endpoint the seller or their platform controls — its response decides **who gets access**. Cross-check the reported `buyer_id` against the buyer the seller expects before treating the delivery as done.
+- ⚠️ The printed pre-signed URL delivers only the **first buyer-access file** (with `--max-file-size` splits, the rest sit alongside it in the bucket) — buyers cannot feed it to `consume --download-url` directly. To hand a buyer a one-URL package, host a self-contained bundle (envelopes + `.bin` + access files, via `manifest.json` or ZIP).
 
 ---
 
 ### T4 — Pay (buyer; CLI 0.0.6+)
 
 Transfer tokens to the seller and (optionally) submit proof in one run. Collect: seller address, amount, chain (`peaq` / `base` / `solana`), order ID; optionally the proof `--confirmation-url`, `--token-address` (omit for native token), and `--rpc-url` (**required** for base and solana; solana also needs `pip install "peaq-os-sdk[solana]"`).
+
+⚠️ **Before running the command, echo the seller address, chain, token, and amount back to the user and get an explicit yes.** `stream pay` sends immediately with **no confirmation prompt of its own**, and on-chain transfers are irreversible. Omitting `--token-address` sends the chain's **native** token — confirm that is what the user intends.
 
 ```
 peaqos stream pay \
@@ -686,7 +711,7 @@ peaqos stream consume \
   --output ./recovered.bin
 ```
 
-Failure triage: `access not granted for this buyer private key` → wrong buyer key; `No buyer access for chunk N` → `--buyer-id` doesn't match what the seller granted; `plaintext hash mismatch` → tampered or corrupted data — tell the buyer not to trust the output.
+Failure triage: `access not granted for this buyer private key` → wrong buyer key; `No buyer access for chunk N` → `--buyer-id` doesn't match what the seller granted; `plaintext hash mismatch` → tampered or corrupted data — tell the buyer not to trust the output. Never use `--skip-verify` to "get past" a failure and then present the output as recovered data — anything produced with verification skipped must be labelled untrusted.
 
 ---
 

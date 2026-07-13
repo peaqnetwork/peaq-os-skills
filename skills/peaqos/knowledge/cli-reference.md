@@ -352,9 +352,9 @@ Output: tabular list of `peaqID`, `Machine ID`, `MCR score`, `Rating`.
 
 ## `peaqos stream`
 
-Data-stream commands (CLI 0.0.5+; `distribute`/`pay`/`payproof` and `consume --download-url` require **0.0.6+**). A machine's data is chunked, encrypted per chunk (XChaCha20-Poly1305), and signed as a chain (Ed25519); buyers get the chunk keys re-wrapped to their X25519 public key. The crypto commands (`publish`, `grant`, `consume` in local mode) are offline — no wallet, no on-chain writes. The paid-flow commands (`distribute`, `pay`, `payproof`) talk to HTTP endpoints and chains.
+Data-stream commands (CLI 0.0.5+; `distribute`/`pay`/`payproof` and `consume --download-url` require **0.0.6+**). A machine's data is chunked, encrypted per chunk (XChaCha20-Poly1305), and signed as a chain (Ed25519); buyers get the chunk keys re-wrapped to their X25519 public key. The crypto commands (`publish`, `grant`, `consume` in local mode) need no wallet and write nothing on-chain — their only network I/O is `publish --input <url>` downloads and the optional `publish --s3` upload. The paid-flow commands (`distribute`, `pay`, `payproof`) talk to HTTP endpoints and chains.
 
-**Key files:** all keys are passed as **file paths**, never inline — X25519 keys are 64 hex chars (optional `0x` prefix), one per line. Generate and guard them like private keys.
+**Key files:** **private** keys are passed as **file paths**, never inline — 64 hex chars (optional `0x` prefix), one per line, `chmod 600`. X25519 **public** keys are shared openly and passed inline as flags (`--owner-public-key`, `--buyer-public-key`, …).
 
 ### `peaqos stream publish`
 
@@ -416,14 +416,14 @@ peaqos stream consume \
 ```
 
 - `--download-url` is **mutually exclusive** with `--chunk-dir`/`--access-dir`/`--data-dir`. The URL must serve a **self-contained release package** — chunk envelopes + `.bin` blobs + access files — as a `manifest.json` file listing or a ZIP archive.
-- ⚠️ `--download-url` does **not** accept the pre-signed URL printed by `peaqos stream distribute` — that URL delivers only the buyer-access files. A full distribute→consume roundtrip needs a self-hosted bundle.
+- ⚠️ `--download-url` does **not** accept the pre-signed URL printed by `peaqos stream distribute` — that URL delivers only the first buyer-access file. A full distribute→consume roundtrip needs a self-hosted bundle.
 - Optional: `--work-dir` / `--keep-files` (remote mode), `--skip-verify` (debugging only), `--json`.
 
 **Exit codes:** 0 success · 1 validation (missing dirs, `--download-url` combined with a dir flag) · 2 decryption/integrity/download failure. Error messages are specific: `access not granted for this buyer private key` = wrong buyer key; `No buyer access for chunk N` = `--buyer-id` doesn't match the access files.
 
 ### `peaqos stream distribute` (0.0.6+)
 
-Seller: wait for a buyer's payment confirmation, then auto-generate access files (same re-key as `grant`) and deliver them to S3, returning a pre-signed download URL. Polls `--confirmation-url` every `--poll-interval`s (default 30) until confirmed or `--timeout`s (default 3600). The endpoint must return JSON with `status`, `buyer_id`, `buyer_public_key_hex`.
+Seller: wait for a buyer's payment confirmation, then auto-generate access files (same re-key as `grant`) and deliver them to S3, returning a pre-signed download URL (for the first access file). Polls `--confirmation-url` every `--poll-interval`s (default 30) until confirmed or `--timeout`s (default 3600). The endpoint must return JSON with `status`, `buyer_id`, `buyer_public_key_hex`.
 
 ```bash
 peaqos stream distribute \
@@ -742,7 +742,8 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_ORCH_API_KEY` | No (Scale commands) | Platform API key for orchestration — optional, only required if deployment enforces API key auth |
 | `PEAQOS_S3_ACCESS_KEY_ID` | No (`stream publish --s3` / `stream distribute`) | S3 credentials; the standard boto3 chain works too |
 | `PEAQOS_S3_SECRET_ACCESS_KEY` | No | Paired with the above |
-| `PEAQOS_S3_REGION` | No | Default S3 region for stream uploads |
+| `PEAQOS_S3_REGION` | No | Default S3 region for stream uploads (overridden by `--s3-region`) |
+| `PEAQOS_S3_ENDPOINT` | No | Default custom S3-compatible endpoint URL (overridden by `--s3-endpoint`) |
 | `PEAQOS_ORDER_STEP_DELAY_SEC` | No | Seconds to pause between `scale order` placement steps (unset = no delay) |
 | `IDENTITY_REGISTRY_ADDRESS` | Yes | IdentityRegistry contract |
 | `IDENTITY_STAKING_ADDRESS` | Yes | IdentityStaking contract |

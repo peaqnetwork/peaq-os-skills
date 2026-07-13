@@ -491,6 +491,8 @@ The CLI prints an order summary and asks for confirmation before any transfer. C
 
 ### Step 5 — Confirm or dispute
 
+x402 orders skip this step — they are confirmed automatically at placement, `order received` on them fails with `ORDER_CLOSED`, and disputes are unavailable once confirmed. For all other rails:
+
 ```bash
 # Confirm delivery — releases held payment
 peaqos scale order received <order-id> --pairing-token-file ./pairing.token
@@ -523,7 +525,7 @@ peaqos scale order list --machine-id mach_<id> --json | jq '.orders[] | {id, sta
 
 Sell the data a machine produces: chunk + encrypt + sign it, grant paying buyers access, get paid. Requires CLI 0.0.5+ for `publish`/`grant`/`consume`; `distribute`, `pay`, `payproof`, and `consume --download-url` need **0.0.6+**. Full flag tables in `knowledge/cli-reference.md`.
 
-All keys are passed as **file paths** (X25519 = 64 hex chars per line). The seller's owner X25519 private key is the only thing that can grant access; the buyer's X25519 private key is the only thing that can decrypt. Guard both like private keys.
+**Private** keys (owner/buyer X25519, machine Ed25519) are passed as **file paths** — one line of 64 hex chars, `chmod 600`, never inline. X25519 **public** keys are shared openly and passed inline as flags. The seller's owner X25519 private key is the only thing that can grant access; the buyer's X25519 private key is the only thing that can decrypt. Neither is recoverable — back both up.
 
 ### Seller — package data
 
@@ -538,7 +540,7 @@ peaqos stream publish \
 peaqos stream publish ... --s3 s3://my-bucket/streams/ --s3-region eu-west-1
 ```
 
-Offline — no wallet, no chain writes. Output: `chunk-<i>.json` envelopes, `chunk-<i>.bin` ciphertext, `manifest.json`.
+No wallet, no on-chain writes — the only network I/O is URL input and the optional S3 upload. Output: `chunk-<i>.json` envelopes, `chunk-<i>.bin` ciphertext, `manifest.json`.
 
 ### Seller — grant access
 
@@ -555,7 +557,7 @@ peaqos stream distribute \
   --order-id ord-001 --delivery s3 --s3 s3://my-bucket/distributes/
 ```
 
-`distribute` blocks (default: poll every 30s, give up after 1h) and prints a pre-signed download URL for the access files. `--delivery` supports only `s3` — the SDK's machine-to-machine P2P delivery channel has no CLI flag. Exit 2 on a key-commitment mismatch means the wrong owner key.
+`distribute` blocks (default: poll every 30s, give up after 1h) and prints a pre-signed download URL for the **first** buyer-access file. `--delivery` supports only `s3` — the SDK's machine-to-machine P2P delivery channel has no CLI flag. Exit 2 on a key-commitment mismatch means the wrong owner key. Point `--confirmation-url` only at an endpoint you or your platform control — its response decides who gets access.
 
 ### Buyer — pay
 
@@ -591,7 +593,7 @@ peaqos stream consume \
   --output ./recovered.bin
 ```
 
-> ⚠️ `--download-url` needs a **self-contained bundle** (chunk envelopes + `.bin` blobs + access files, served as a `manifest.json` listing or a ZIP). It does **not** accept the pre-signed URL from `peaqos stream distribute` — that URL carries only the access files.
+> ⚠️ `--download-url` needs a **self-contained bundle** (chunk envelopes + `.bin` blobs + access files, served as a `manifest.json` listing or a ZIP). It does **not** accept the pre-signed URL from `peaqos stream distribute` — that URL carries only the first buyer-access file.
 
 Every chunk is verified (hash, signature, chain link) before decryption; `--skip-verify` is for debugging only.
 
