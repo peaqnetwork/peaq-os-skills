@@ -1,0 +1,45 @@
+{
+  "name": "rtp",
+  "version": "0.1.0",
+  "description": "Put peaq machines to paid work on the Robot Task Protocol (RTP) using the Spraay x402 gateway. Handles the provider side (register a robot with its capabilities, pricing, payment address and webhook connection; serve dispatched tasks; report completion to release escrow) and the buyer side (discover robots, dispatch a paid task over x402, poll the task lifecycle, read a robot profile). Also handles fleet payouts via Batch Payments for Agents (BPA) 1.0 — pay up to 200 robot operators in one atomic, non-custodial transaction on Base, with a free schema pre-flight and a live fee quote before anything is signed. Payment is USDC over x402 on Base (eip155:8453) or Solana. A machine's peaqID address doubles as its RTP payment address, so a peaq-onboarded machine can start earning without a second identity.",
+  "entrypoint": "AGENT-PROMPT.md",
+  "capabilities_required": [
+    "shell_exec",
+    "file_read",
+    "web_fetch",
+    "interactive_input"
+  ],
+  "knowledge_files": [
+    "GUIDE.md",
+    "knowledge/decision-tree.md",
+    "knowledge/concepts.md",
+    "knowledge/api-reference.md",
+    "knowledge/troubleshooting.md",
+    "examples/.env.example"
+  ],
+  "adapters": [
+    "adapters/claude-code/SKILL.md",
+    "adapters/cursor/SKILL.md",
+    "adapters/windsurf/SKILL.md"
+  ],
+  "runtime_dependency": {
+    "required": ["curl"],
+    "optional": ["node >= 18", "@x402/fetch", "@x402/evm", "viem"],
+    "notes": "The free RTP endpoints (register, complete, update, deregister) need nothing but curl. The paid endpoints need an x402 client that speaks x402Version 2 — the gateway's own 402 challenge declares version 2, so use @x402/fetch + @x402/evm (v2). The older `x402-fetch` package implements v1 and is deprecated. There is no peaqos CLI command for RTP; this skill drives the gateway over HTTP."
+  },
+  "keywords": [
+    "peaq", "peaqos", "peaqid", "did", "rtp", "robot-task-protocol",
+    "x402", "usdc", "base", "solana", "micropayments", "escrow",
+    "batch-payments", "bpa", "fleet-payouts", "machine-economy",
+    "depin", "robotics", "autonomous-agents", "agent-payments"
+  ],
+  "links": {
+    "homepage": "https://peaq.xyz",
+    "docs": "https://docs.peaq.xyz",
+    "gateway": "https://gateway.spraay.app",
+    "rtp_spec": "https://github.com/plagtech/rtp-spec",
+    "bpa_spec": "https://docs.spraay.app/bpa/1.0/",
+    "x402": "https://x402.org",
+    "batch_contract_base": "https://basescan.org/address/0x1646452F98E36A3c9Cfc3eDD8868221E207B5eEC"
+  }
+}
