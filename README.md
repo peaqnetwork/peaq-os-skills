@@ -19,6 +19,7 @@ Auto-detects your installed agent (Claude Code, Cursor, Windsurf) and installs t
 | Skill | What it does |
 |-------|-------------|
 | `peaqos` | Full machine onboarding — peaqID, Machine NFT, MCR setup, event submission, fleet management |
+| `rtp` | Paid machine work — register a robot on the Robot Task Protocol, accept and serve paid tasks, hire robots over x402, batch-pay a fleet |
 
 More skills coming as peaqOS expands.
 
