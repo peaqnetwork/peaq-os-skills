@@ -188,7 +188,7 @@ curl -s -X POST $GW/api/v1/robots/task -H 'Content-Type: application/json' -H "X
 # then PATCH the robot to status "offline" (free) and repeat the "pick" dispatch
 ```
 
-**Pass criteria — actual output, deployed gateway v3.8.2, 2026-08-09:**
+**Pass criteria — actual output, deployed gateway v3.8.2, 2026-08-09; rails re-verified 2026-09-15:**
 
 ```
 GET  /                              200  "version":"3.8.2"
@@ -197,6 +197,7 @@ POST /api/v1/robots/register        201  robo_fbf7d59c475593a5  capabilities ["p
 unpaid, VALID body                  402  x402Version 2, accepts[0] amount "50000" eip155:8453
                                          asset 0x8335…2913, payTo 0xAd62…95c8, maxTimeoutSeconds 300
                                          accepts[1] solana:5eykt4Us… amount "50000"
+                                         accepts[2] eip155:4663 amount "50000" asset 0x5fc5…d168
                                          extensions.bazaar present; _spraay.gateway.version "3.8.2"
 unpaid, INVALID body (bogus robot)  402  byte-identical challenge — discovery preserved
 unpaid, EMPTY body {}               402  byte-identical challenge — discovery preserved

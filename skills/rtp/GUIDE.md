@@ -30,9 +30,11 @@ curl -s https://gateway.spraay.app/health
 ```
 
 ```json
-{"status":"healthy","uptime":"1d 0h 10m","version":"1.0.0",
+{"status":"healthy","uptime":"2d 21h 7m","version":"3.8.2",
  "services":{"aiGateway":"configured","batchPayments":"ready","swapData":"ready"},
- "network":"eip155:8453","protocol":"x402"}
+ "network":"eip155:8453","protocol":"x402",
+ "robinhoodUsdg":{"enabled":true,"network":"eip155:4663","asset":"USDG","payTo":"0xdAA0…9F33",
+                  "facilitator":"0x1856…A470","stats":{"verified":0,"settled":0}}}
 ```
 
 For the paid endpoints you need Node 18+ and an x402 **v2** client:
@@ -480,12 +482,20 @@ curl -s -X POST https://gateway.spraay.app/api/v1/robots/deregister \
 |------|---------|-------|
 | Base | `eip155:8453` | USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Solana | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` | USDC `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| Robinhood Chain | `eip155:4663` | USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
+
+The rail set has changed between gateway deploys — read `accepts[]` from the live challenge rather
+than assuming this table is complete.
 
 ### Batch contract
 
 | Chain | Chain ID | Contract |
 |-------|----------|----------|
 | Base | 8453 | `0x1646452F98E36A3c9Cfc3eDD8868221E207B5eEC` |
+| Unichain | 130 | `0x08fA5D1c16CD6E2a16FC0E4839f262429959E073` |
+| Robinhood Chain | 4663 | `0x08fA5D1c16CD6E2a16FC0E4839f262429959E073` |
+
+Base is the only one this skill uses.
 
 ### Task states
 

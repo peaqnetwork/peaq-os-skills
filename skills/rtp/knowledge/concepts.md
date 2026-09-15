@@ -90,7 +90,9 @@ separate transaction — see batch payouts below.
 **Technical:** An HTTP payment protocol. An unpaid request to a priced resource returns `402` with a
 challenge listing accepted rails (`accepts[]`), each with a `scheme`, `network`, `amount` in raw base
 units, `asset`, and `payTo`. The client signs a payment for one rail and retries with a payment
-header. This gateway speaks `x402Version: 2` and offers USDC on Base (`eip155:8453`) and on Solana.
+header. This gateway speaks `x402Version: 2` and currently offers three rails: USDC on Base
+(`eip155:8453`), USDC on Solana, and USDG on Robinhood Chain (`eip155:4663`). The set has changed
+between deploys — read `accepts[]` rather than assuming it.
 
 **Plain English:** Instead of API keys and monthly bills, the server replies "that costs half a
 cent," your wallet pays it, and the request goes through. Each call is bought individually.

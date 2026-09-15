@@ -7,9 +7,10 @@ description: |
   report a task complete and release escrow, look up a robot's profile or capabilities, set or
   change per-task pricing, take a machine offline, or pay a whole fleet of robot operators at once.
   Also handles batch payouts: validating a payout roster, quoting the fee, and building the atomic
-  Base transaction that pays up to 200 recipients (BPA 1.0). Payment is USDC over x402 on Base
-  (eip155:8453) or Solana. A machine's peaqID address doubles as its RTP payment address, so a
-  peaq-onboarded machine can start earning without a second identity. Invoke on any mention of RTP,
+  Base transaction that pays up to 200 recipients (BPA 1.0). Payment is over x402 on Base
+  (eip155:8453, USDC), Solana (USDC) or Robinhood Chain (eip155:4663, USDG). A machine's peaqID
+  address doubles as its RTP payment address, so a peaq-onboarded machine can start earning
+  without a second identity. Invoke on any mention of RTP,
   Robot Task Protocol, robot tasks, hiring a robot, machine-to-machine payments, x402 robot
   payments, Spraay gateway, robot escrow, fleet payouts, batch payments, BPA, or paying many
   wallets at once.

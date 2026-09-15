@@ -163,14 +163,16 @@ wire it into a specific framework. The knowledge files are read at runtime and n
 
 ## Networks
 
-| | Base | Solana |
-|-|------|--------|
-| x402 network ID | `eip155:8453` | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` |
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (6dp) | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
-| Batch payouts | Supported — contract above | Not supported by this skill |
-| Explorer | [basescan.org](https://basescan.org) | [solscan.io](https://solscan.io) |
+| | Base | Solana | Robinhood Chain |
+|-|------|--------|-----------------|
+| x402 network ID | `eip155:8453` | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` | `eip155:4663` |
+| Asset | USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (6dp) | USDC `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
+| Batch payouts | Supported — contract above | Not supported by this skill | Not used by this skill |
+| Explorer | [basescan.org](https://basescan.org) | [solscan.io](https://solscan.io) | — |
 
-Both rails are offered on every 402 challenge; you pay one. Batch payouts are Base-only.
+All three rails are offered on every 402 challenge; you pay one. The rail set has changed between
+gateway deploys, so read `accepts[]` from the live challenge rather than assuming this table is
+complete. Batch payouts in this skill are Base-only.
 
 ---
 

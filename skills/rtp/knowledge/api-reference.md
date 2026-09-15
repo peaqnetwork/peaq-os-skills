@@ -66,6 +66,15 @@ Paid endpoints answer an unpaid request with `HTTP 402` and an x402 challenge. L
       "payTo": "8WhWE8YgY5QBWyLowEHuaZiWdwDM3SrgDk36xYBNvYNS",
       "maxTimeoutSeconds": 300,
       "extra": { "feePayer": "Hc3sdEAsCGQcpgfivywog9uwtk8gUBUZgsxdME1EJy88" }
+    },
+    {
+      "scheme": "exact",
+      "network": "eip155:4663",
+      "amount": "5000",
+      "asset": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+      "payTo": "0xdAA0fb4fb470AA8fb53A0c301EF9AADC89949F33",
+      "maxTimeoutSeconds": 300,
+      "extra": { "name": "Global Dollar", "version": "1" }
     }
   ]
 }
@@ -74,7 +83,9 @@ Paid endpoints answer an unpaid request with `HTTP 402` and an x402 challenge. L
 Notes:
 - `amount` is in **raw base units**, not dollars. USDC is 6 decimals, so `5000` = $0.005,
   `50000` = $0.05, `20000` = $0.02, `2000` = $0.002, `1000` = $0.001.
-- Two rails are always offered: Base (`eip155:8453`) and Solana. Pick one; you pay once.
+- Three rails are currently offered: Base (`eip155:8453`, USDC), Solana (USDC), and Robinhood Chain
+  (`eip155:4663`, USDG). Pick one; you pay once. The set has changed between gateway deploys — read
+  `accepts[]` from the live challenge rather than assuming a fixed number of rails.
 - The same challenge is also base64-encoded in the `payment-required` response header.
 - `maxTimeoutSeconds: 300` — the signed payment is valid for 5 minutes.
 - The Solana `extra.feePayer` changes between gateway deploys. Read it from the live challenge rather
@@ -396,9 +407,12 @@ The caller signs and broadcasts. Nothing is custodied by the gateway.
 | Chain | Chain ID | Contract |
 |-------|----------|----------|
 | Base | 8453 | [`0x1646452F98E36A3c9Cfc3eDD8868221E207B5eEC`](https://basescan.org/address/0x1646452F98E36A3c9Cfc3eDD8868221E207B5eEC) |
+| Unichain | 130 | `0x08fA5D1c16CD6E2a16FC0E4839f262429959E073` |
+| Robinhood Chain | 4663 | `0x08fA5D1c16CD6E2a16FC0E4839f262429959E073` |
 
-This is the only batch contract this skill uses. If a response ever returns a different `to` address
-or a `chainId` other than `8453`, stop and do not sign.
+The gateway advertises all three at `GET /api/v1/tokens`. Base is the only one this skill uses. If
+a response ever returns a different `to` address or a `chainId` other than `8453`, stop and do not
+sign.
 
 Base token addresses used above: USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`,
 USDT `0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2`, EURC `0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42`,
@@ -420,8 +434,11 @@ BPA 1.0 schema validation. Uses the **`to`** field (see the shapes table).
 - Duplicate recipient address → **`warnings[]`**, not an error. The contract will pay it twice.
 - The HTTP status is `200` even when `valid` is `false` — check the `valid` field, not the status code.
 
-Supported chains include `base`, `ethereum`, `arbitrum`, `polygon`, `bnb`, `avalanche`, `unichain`,
-`solana`, `xrp`, `stellar` and others. Only `base` is wired to the batch contract above.
+Chains this endpoint accepts, as reported by the gateway: `base`, `ethereum`, `arbitrum`, `polygon`,
+`bnb`, `avalanche`, `unichain`, `plasma`, `bob`, `robinhood`, `solana`, `bittensor`, `xrp`,
+`stellar`, `stacks`, `bitcoin`. Of these, `base`, `unichain` and `robinhood` are wired to a batch
+contract (see the table above); this skill uses `base` only. An unrecognised chain comes back as
+`valid: false` with `Unsupported chain "…"` plus the supported list.
 
 ---
 
@@ -429,9 +446,24 @@ Supported chains include `base`, `ethereum`, `arbitrum`, `polygon`, `bnb`, `aval
 
 Query: `recipients` (required, positive int), `chain` (default `base`), `amount` (optional total).
 
-Returns `protocolFeeBps: 30`, `protocolFeeUSD`, `estimatedGasUSD`, `estimatedTotalCostUSD`, and
-labels its own `precision` as `"rough — use /api/v1/batch/estimate for live quote"`. Use it for
-framing only; quote from `batch/estimate` before anyone signs.
+**The payload is nested under `estimate`** — reading these fields off the top level yields
+`undefined`:
+
+```json
+{ "estimate": { "chain": "base", "recipients": 2, "totalAmount": 0.13,
+                "protocolFeeBps": 30, "protocolFeeUSD": 0.00039,
+                "estimatedGasUSD": 0.046, "estimatedTotalCostUSD": 0.0464,
+                "precision": "rough — use /api/v1/batch/estimate for live quote",
+                "bpaVersion": "1.0" },
+  "timestamp": 1789437166053,
+  "_spraay": { "free": true, "gateway": "https://gateway.spraay.app", "related": ["…"] } }
+```
+
+Use it for framing only; quote from `batch/estimate` before anyone signs. Gas figures move with the
+network — treat any number here as indicative, not as a quote.
+
+This endpoint does **not** validate `chain`: it will happily return an estimate for a chain that
+`/free/validate-batch` rejects and `batch/execute` cannot serve. Validate first.
 
 ---
 

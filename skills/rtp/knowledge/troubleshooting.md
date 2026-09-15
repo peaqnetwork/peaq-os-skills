@@ -278,7 +278,7 @@ assuming an outage — a resolver that returns NXDOMAIN for the host while other
 is a local DNS problem, not a gateway one. A healthy response looks like:
 
 ```json
-{"status":"healthy","uptime":"…","version":"1.0.0",
+{"status":"healthy","uptime":"…","version":"3.8.2",
  "services":{"batchPayments":"ready"},"network":"eip155:8453","protocol":"x402"}
 ```
 
