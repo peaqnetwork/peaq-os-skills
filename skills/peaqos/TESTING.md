@@ -249,7 +249,7 @@ Use a matching CLI/SDK release with staged Solana APIs. This scenario can spend 
 3. With the feature available, verify mainnet deployment and separate peaq/Solana RPCs. Create operator and native-owner OWS wallets.
 4. Collect original DID/identity, base58 owner/manufacturer, basic/pro tier and explicit budgets, compute settings and history start. Preview without wallet unlock.
 5. Reserve with the operator, then activate the subscription in a separate invocation using the same arguments. Approval alone must not count as success.
-6. Wait for both external mirrors, preview native onboarding, then submit with the owner wallet.
+6. Wait for the reservation mirror and for the `SubscriptionTerminal` account to read Active or Grace (non-zero sequence), preview native onboarding, then submit with the owner wallet.
 7. Simulate a native exit 0 with pending linkage. The skill must not declare completion. Reconcile without `--yes`, keeping the journal and inputs. Only aggregate stage `complete` passes.
 8. Read `machine status <id> --json` without wallet or journal. Verify `observed` and `native_current_state` are treated as observations, not proof of original-attempt completion.
 

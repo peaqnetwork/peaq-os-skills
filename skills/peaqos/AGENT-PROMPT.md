@@ -702,7 +702,7 @@ Notes to surface:
 
 ### T4: Pay (buyer; CLI 0.0.9+)
 
-Transfer tokens to the seller and (optionally) submit proof in one run. Collect: seller address, amount, chain (`peaq` / `base` / `solana`), order ID; optionally the proof `--confirmation-url`, `--token-address` (omit for native token), and `--rpc-url` (**required** for base and solana). Solana also needs `pip install "peaq-os-sdk[solana]"` and signs with the active OWS wallet's Solana account: `PEAQOS_OWS_WALLET` (plus `OWS_PASSPHRASE` non-interactively) is required, a raw key or `--private-key-file` is refused for `--chain solana`.
+Transfer tokens to the seller and (optionally) submit proof in one run. Collect: seller address, amount, chain (`peaq` / `base` / `solana`), order ID; optionally the proof `--confirmation-url`, `--token-address` (omit for native token), and `--rpc-url` (**required** for base and solana). Solana also needs `pip install "peaq-os-sdk[solana]"` and signs with the active OWS wallet's Solana account: `PEAQOS_OWS_WALLET` (plus `OWS_PASSPHRASE` non-interactively) is required; a raw key or `--private-key-file` is accepted for the client but cannot supply the Solana signature, so without the wallet the command exits 1.
 
 ⚠️ **Before running the command, echo the seller address, chain, token, and amount back to the user and get an explicit yes.** `stream pay` sends immediately with **no confirmation prompt of its own**, and on-chain transfers are irreversible. Omitting `--token-address` sends the chain's **native** token: confirm that is what the user intends.
 

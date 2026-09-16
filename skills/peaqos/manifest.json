@@ -1,7 +1,7 @@
 {
   "name": "peaqos",
   "version": "0.3.0",
-  "description": "Drive peaqOS machine activation, lifecycle, subscriptions, DID management, MCR, monetization, Scale, Stream and Solana onboarding from the peaqos CLI. Needs CLI 0.0.9 or newer (Economics 2.0). Supports peaq mainnet and agung testnet; homing a machine on Solana mainnet needs the CLI release that ships --chain solana.",
+  "description": "Drive peaqOS machine activation, lifecycle, subscriptions, DID management, MCR, monetization, Scale, Stream and Solana onboarding from the peaqos CLI. Needs CLI 0.0.9 or newer (Economics 2.0). Supports peaq mainnet and agung testnet; homing a machine on Solana mainnet needs peaq-os-cli 0.0.10 or newer.",
   "entrypoint": "AGENT-PROMPT.md",
   "capabilities_required": [
     "shell_exec",
