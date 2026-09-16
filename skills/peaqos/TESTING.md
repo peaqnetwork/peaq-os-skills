@@ -154,6 +154,7 @@ Run through at least two distinct machine profiles and check the recommendation 
    - "MCR score is 0 after submitting events"
    - "PEER_MISMATCH on peaq-mainnet"
    - "RPC_FAILED: MachineSubscription.fullMode() could not be read"
+   - "TECHNICALLY_PAUSED on peaqos activate"
 
 **Pass criteria:**
 - Diagnosis matches `knowledge/troubleshooting.md` for each symptom

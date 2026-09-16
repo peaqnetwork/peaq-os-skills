@@ -146,8 +146,10 @@ The four CLI-wide exit codes apply. Once input validation has passed, every `act
 | :-- | :-- |
 | `0` | none; `status` is `activated` or `already_active` |
 | `1` | `INVALID_INPUT`, `CANCELLED_BEFORE_SUBMIT` (confirmation declined), `SPONSORED_UNSUPPORTED`, `INVALID_TIER` |
-| `2` | `ORACLE_UNPRICED` (contracts reachable, no PEAQ price committed), `INSUFFICIENT_PEAQ`, `QUOTE_MOVED`, `TX_REVERTED`, `EVENT_MISMATCH`, `PENDING`, `ALREADY_ACTIVATED_RACE` |
+| `2` | `ORACLE_UNPRICED` (contracts reachable, no PEAQ price committed), `INSUFFICIENT_PEAQ`, `QUOTE_MOVED`, `TX_REVERTED`, `EVENT_MISMATCH`, `PENDING`, `ALREADY_ACTIVATED_RACE`, `TECHNICALLY_PAUSED` (protocol pause read before any approval, nothing spent) |
 | `3` | `TOKENOMICS_NOT_CONFIGURED`, `DEPLOYMENT_UNKNOWN`, `CHAIN_MISMATCH`, `PEER_MISMATCH`, `ADDRESSES_UNSET` (network supported, contracts not deployed there) |
+
+Two codes come with the CORE-777 contract change of 2026-09-15 (SDK fixes in `peaq-os-sdk-js` #96 and `peaq-os-sdk-py` #98): `NOT_ECONOMIC_AUTHORITY` replaces `NOT_FULL_MODE` and means the selected deployment's `MachineSubscription` is not the economic authority (a CLI release without a row for it reports `ACTIVATION_FAILED` at exit `2`; the mapped release uses exit `3`), and `TECHNICALLY_PAUSED` means activation, renewal or the Solana `subscription` phase read a set `MachineStateAndSync` pause flag before any approval. Until the fixed SDK is published, `peaq-mainnet` activation and renewal fail with `RPC_FAILED` naming `fullMode()`; see `troubleshooting.md`.
 
 #### Pending transactions and `peaqos.log`
 
@@ -157,7 +159,7 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.9 does not imply this feature is available.
 
-`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
+`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause fails with `TECHNICALLY_PAUSED` and spends nothing. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
 
 | Solana option | Meaning |
 | --- | --- |
