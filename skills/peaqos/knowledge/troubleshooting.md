@@ -138,7 +138,7 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 
 | Observation | Action |
 |-------------|--------|
-| `activate --help` lacks `--chain` | Stop this path. Tell the user to run `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"`. Extras alone do not add missing SDK APIs. |
+| `activate --help` lacks `--chain` | Stop this path. Tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'`. Extras alone do not add missing SDK APIs. |
 | Wrong chain or missing configuration | Mainnet only: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set separate peaq and Solana RPC URLs. `whoami` cluster output is unverified metadata. |
 | Rejected tier or EVM mode flags | Use basic/pro; omit `--for`, `--machine-key` and `--slippage-bps`. Supply base58 native owner/manufacturer and all explicit caps/history/compute settings. |
 | Reservation or subscription confirmed | Rerun that phase with original inputs without `--yes` to reconcile. Keep the same directory and `peaqos.log`. |

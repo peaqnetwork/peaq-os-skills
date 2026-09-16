@@ -290,7 +290,7 @@ This path needs the release that ships `peaqos activate --chain solana` and a ma
 peaqos activate --help | grep -q -- '--chain'
 ```
 
-If absent, tell the user to run `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"` and stop this path. Installing extras on an older SDK does not add the APIs. Do not assume an unreleased version number.
+If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop this path. Installing extras on an older SDK does not add the APIs. Do not assume an unreleased version number.
 
 ### Configure and prepare two wallets
 
@@ -611,7 +611,7 @@ The pairing token is shown exactly once. Save it immediately:
 echo "<token>" > ./pairing.token && chmod 600 ./pairing.token
 ```
 
-If the token is lost or the session expires (`AGENT_AUTH_REQUIRED`), re-run `peaqos scale agent pair` to create a fresh pairing: the CLI does not currently expose a dedicated session-refresh subcommand.
+If the token is lost or the session expires (`AGENT_AUTH_INVALID`), re-run `peaqos scale agent pair` to create a fresh pairing: the CLI does not currently expose a dedicated session-refresh subcommand.
 
 ### Step 3: Search the Market
 

@@ -56,7 +56,7 @@ Also check for a prior run:
 [ -f .env ] && peaqos whoami
 ```
 
-For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. One exception: a user working with a Tokenomics 1.0 machine (`did:peaq:0x<address>`, onboarded before 2026-09-01) needs the variable **unset** for `qualify mcr`, `show machine` and `show operator machines`, because setting it switches those reads to the 2.0 server and rejects address DIDs. Ask which generation the machine is before treating a missing deployment ID as a misconfiguration. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
+For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. One exception: a user working with a Tokenomics 1.0 machine (`did:peaq:0x<address>`, onboarded before 2026-09-01) needs the variable **unset** for `qualify mcr`, `show machine` and `show operator machines`, because setting it switches those reads to the 2.0 server and rejects address DIDs. Ask which generation the machine is before treating a missing deployment ID as a misconfiguration. The same applies to Scale (Phase 9): its identity-binding commands only work with the variable unset, see the Tokenomics mode gate there. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
 
 If `peaqos whoami` succeeds and shows a configured address and the correct `TOKENOMICS_DEPLOYMENT_ID`, note it and offer to skip to Phase 6 (onboarding).
 
@@ -83,7 +83,7 @@ Routing:
 - D → Read `knowledge/troubleshooting.md`, ask for symptom, diagnose
 - E → Phase 9 (Scale)
 - F → Phase 10 (Stream)
-- G, or a request for Solana, SVM or a Solana machine home → Phase 11 (Solana onboarding)
+- G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11.
 
 ---
 
@@ -390,10 +390,10 @@ echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
 
 **Tokenomics mode gate.** With `TOKENOMICS_DEPLOYMENT_ID` set, the CLI builds the SDK client in Tokenomics mode, and the SDK refuses every orchestration call that binds a machine identity (`scale machine onboard | list | status`, `scale agent pair`, `scale search`) with `TokenomicsIntegrationUnavailableError` ("orchestration identity binding"). The Market verifies identities against the Tokenomics 1.0 MCR, so Scale works today for **1.0 machines** (`did:peaq:0x<address>`) from a `.env` **without** `TOKENOMICS_DEPLOYMENT_ID`. A machine activated under Economics 2.0 cannot be registered in the Market yet; tell the user so instead of retrying.
 
-- `NOT_CONFIGURED` → user needs to complete on-chain onboarding first (Phases 2–7). Offer to start there.
+- `NOT_CONFIGURED` → Scale needs an existing **Tokenomics 1.0** machine identity (`did:peaq:0x<address>`) plus a `.env` with the signer and the six legacy addresses and **without** `TOKENOMICS_DEPLOYMENT_ID`. Running Phases 2–7 does not help: they activate a 2.0 machine, which the gate above rejects. If the user has no 1.0 machine, say that Scale is not available for their machine yet and stop.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
-  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set. The easiest fix is `peaqos init`: the wizard prompts for the Orchestration API URL and writes it to `.env`. Alternatively, add `PEAQOS_ORCHESTRATION_URL=https://orchestration.peaq.xyz` to your `.env` manually. That's the default Machine Markets endpoint: replace it only if your platform admin gave you a different one."
-  Do not proceed until set.
+  > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set. Add `PEAQOS_ORCHESTRATION_URL=https://orchestration.peaq.xyz` to your `.env` (that's the default Machine Markets endpoint: replace it only if your platform admin gave you a different one)."
+  Do not fix this with `peaqos init`: the wizard writes `TOKENOMICS_DEPLOYMENT_ID`, which switches the client into the mode Scale refuses. Do not proceed until set.
 - `PEAQOS_ORCH_API_KEY`: **optional**. Some deployments require it; others do not. If the user has one, they should set it in `.env`. If they get an `AUTH_REQUIRED` error when running Scale commands, that is the signal to set it.
 
 Once both pass, ask the user: "What would you like to do in the Machine Market?" Wait for their response. Options:
@@ -733,9 +733,9 @@ Failure triage: `access not granted for this buyer private key` → wrong buyer 
 
 ## Phase 11: Solana onboarding
 
-Route here for Solana, SVM or a machine homed on Solana. Read `GUIDE.md#solana` and the Solana activation section of `knowledge/cli-reference.md` before acting.
+Route here only for onboarding, activating or homing a machine on Solana (SVM). Solana payments (`stream pay --chain solana`, Market orders paid in SPL tokens) belong to Phase 10 and Phase 9 and work on CLI 0.0.9. Read `GUIDE.md#solana` and the Solana activation section of `knowledge/cli-reference.md` before acting.
 
-1. Gate: run `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"` and stop this path. Do not assume CLI 0.0.9 ships `--chain solana`.
+1. Gate: run `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop this path. Do not assume CLI 0.0.9 ships `--chain solana`.
 2. Verify mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Check separate peaq `PEAQOS_RPC_URL` and Solana `PEAQOS_SVM_RPC_URL`. `whoami` cluster output is unverified metadata. There is no testnet walkthrough.
 3. Create two OWS wallets using `peaqos wallet create`: a peaq operator paying peaq gas and bond, and a Solana owner paying SOL fees and rent. Fund both public addresses. Select each through `PEAQOS_OWS_WALLET` per phase and clear raw-key overrides as in the guide.
 4. Collect the original identity, base58 manufacturer and Solana owner, optional EVM operator assertion and Solana controller, tier `basic` or `pro`, DID contents and explicit budgets. Write the DID using `GUIDE.md#did-document`. Use the guide's shared argument array with `--chain solana`, `--max-net-peaq-amount` (or `--payment usdt --max-usdt-amount`), `--max-native-fee-lamports`, `--max-native-rent-lamports`, `--from-block`, `--compute-unit-limit` and `--compute-unit-price-micro-lamports`. Zero is strict. Reject `--for`, `--machine-key`, `--slippage-bps` and tier `entry`.

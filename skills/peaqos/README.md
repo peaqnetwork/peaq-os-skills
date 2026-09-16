@@ -71,7 +71,7 @@ Load `AGENT-PROMPT.md` as the agent's system prompt or instructions. Make the `k
 
 ## Quick command reference
 
-These are the underlying commands. In activation rows, `...` means the required flags: `--machine-type`, `--credential-subject-hex`, `--manufacturer`, `--tier` and `--did-document`. See `GUIDE.md#activation` for a complete example. Set `TOKENOMICS_DEPLOYMENT_ID` and verify the six legacy addresses after init. The wizard leaves `EVENT_REGISTRY_ADDRESS` empty unless supplied.
+These are the underlying commands. In activation rows, `...` means the required flags: `--machine-type`, `--credential-subject-hex`, `--manufacturer`, `--tier` and `--did-document`. See `GUIDE.md#activation` for a complete example. For activation, `machine` and `monetize`, set `TOKENOMICS_DEPLOYMENT_ID` and verify the six legacy addresses after init (the wizard leaves `EVENT_REGISTRY_ADDRESS` empty unless supplied). For the `scale` rows, leave `TOKENOMICS_DEPLOYMENT_ID` unset and use a Tokenomics 1.0 machine: the SDK refuses Market identity binding in Tokenomics mode.
 
 | Goal | Command |
 |------|---------|

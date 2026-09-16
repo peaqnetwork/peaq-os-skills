@@ -200,7 +200,7 @@ Run through at least two distinct machine profiles and check the recommendation 
 **Purpose:** Verify the full Scale guided flow: market onboard → agent pair → search → order.
 
 **Prerequisites:**
-- Complete S2 first (machine must have an on-chain identity and funded wallet)
+- An existing **Tokenomics 1.0** machine (`did:peaq:0x<address>`) with its controller key, and a `.env` without `TOKENOMICS_DEPLOYMENT_ID`. S2 does not qualify: it activates a 2.0 machine, which the Scale gate rejects
 - Installed `peaq-os-cli` must include the `scale` command group: confirm with `peaqos scale --help`. If the command is unknown, run `pip install --upgrade peaq-os-cli`.
 - `PEAQOS_ORCHESTRATION_URL` set in `.env` (required). The default Machine Markets API is `https://orchestration.peaq.xyz`: replace it only if your platform admin gave you a different URL.
 - `PEAQOS_ORCH_API_KEY` set if the deployment requires it (optional: only needed if a Scale command returns `AUTH_REQUIRED`).
@@ -212,7 +212,7 @@ Run through at least two distinct machine profiles and check the recommendation 
 2. Select **E: Connect a machine to the Machine Market (Scale)**
 3. Confirm the prerequisite check passes (orchestration URL detected; API key check is skipped as it is optional)
 4. Select **S1: Register a machine in the Market**
-5. Provide identity ref (DID from S2), display name, owner ID, machine type, runtime profile
+5. Provide identity ref (the 1.0 machine's `did:peaq:0x<address>`), display name, owner ID, machine type, runtime profile
 6. Sign the identity challenge (use `--identity-key-file` or OWS if available)
 7. Capture the machine ID from output
 8. Select **S2: Pair an AI agent**

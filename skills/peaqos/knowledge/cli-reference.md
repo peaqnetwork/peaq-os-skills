@@ -155,7 +155,7 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 ### Solana activation (`--chain solana`, release of 2026-09-16)
 
-Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"` and stop the Solana path. CLI 0.0.9 does not imply this feature is available.
+Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.9 does not imply this feature is available.
 
 `peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
 
