@@ -25,8 +25,8 @@ Generate fresh: `peaqos init` → choose "generate".
 **Fix:** Fill it and verify all six addresses using `GUIDE.md#network-reference`. Mainnet 2.0: `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0: `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`; agung: `0x2DAD8905380993940e340C5cE6d313d5c2780040`. Confirm `TOKENOMICS_DEPLOYMENT_ID` in `whoami`'s `Tokenomics 2.0:` block.
 
 **Symptom:** `peaqos whoami` shows `Chain ID: 3338` but you expect testnet
-**Cause:** `PEAQOS_NETWORK=mainnet` instead of `testnet`.
-**Fix:** Set `PEAQOS_NETWORK=testnet` in `.env`.
+**Cause:** `PEAQOS_RPC_URL` points at a mainnet endpoint; `PEAQOS_NETWORK` is only a label, the chain ID comes from the RPC.
+**Fix:** Set the agung RPC, `TOKENOMICS_DEPLOYMENT_ID=agung-2026-08-28` and the agung legacy addresses in `.env` (or rerun `peaqos init` for testnet), then `whoami` again.
 
 **Symptom:** `Your peaq_os_sdk does not support OWS wallet commands` or similar (exit 3)
 **Cause:** OWS wallet support not installed.
@@ -58,9 +58,8 @@ Then re-run the full `peaqos activate` command (same identity flags, tier and DI
 **Fix (mainnet):** Confirm `PEAQOS_GAS_STATION_URL=https://depinstation.peaq.xyz` in `.env`.
 
 **Symptom:** TOTP code rejected (`INVALID_2FA`)
-**Cause:** Code entered after the 30-second TOTP window expired.
-**Fix:** Wait for next code in your authenticator app and re-enter immediately.
-The CLI will prompt for a fresh code automatically.
+**Cause:** The code was wrong or entered after the 30-second TOTP window.
+**Fix:** The CLI exits on `INVALID_2FA`; rerun the command and enter the next code immediately. Only the expired codes (`TOTP_EXPIRED`, `TWO_FA_EXPIRED`, `2FA_EXPIRED`) get an automatic re-prompt.
 
 ---
 
@@ -85,6 +84,7 @@ Read exit status and `error_code` together. Exit 0 is success or preview; 1 is u
 | `RPC_FAILED` with `MachineSubscription.fullMode() could not be read` (the SDK's own code is `READ_FAILED`) | 2 | SDK 0.7.1 and older read `fullMode()`, which mainnet replaced with `isEconomicAuthority()` on 2026-09-15 (CORE-777). The RPC is fine. Run `pip install -U peaq-os-cli peaq-os-sdk`; a fixed SDK reads `isEconomicAuthority()` and never shows this message. If the newest release still fails, the fix is not published yet; agung is not upgraded and still activates. |
 | `NOT_ECONOMIC_AUTHORITY` (SDK code; CLI 0.0.9 has no row for it and reports `ACTIVATION_FAILED` at exit 2, the Solana release maps it to exit 3 with `TOKENOMICS_DEPLOYMENT_ID` guidance) | 2 or 3 | The selected deployment's `MachineSubscription` is not the economic authority, so it cannot activate or fund a subscription. Use a peaq deployment (`peaq-mainnet`, `agung-2026-08-28`); changing the RPC does not help. Replaces `NOT_FULL_MODE`, which no longer occurs. |
 | `TECHNICALLY_PAUSED` | 2 | A protocol technical pause (global or for this machine) blocks activation, renewal and the Solana `subscription` phase. The SDK reads both flags before its first approval; a pause that starts after an approval confirmed (renewal, USDT activation, the Solana subscription loop) still ends here, with the approval gas spent and the allowance left in place. Read the reported transactions before saying nothing was spent. Wait for the pause to clear, then preview again. Same code and exit on `activate` and `machine subscription renew`. |
+| `SUBSCRIPTION_NOT_ELIGIBLE` | 1 (Solana release) | The deployment record reads the `SubscriptionTerminal` account and it is absent or not Active/Grace for this machine, so onboarding or an event is refused before any write. Not raised while the record reads the mirror (the release default). Check `machine status --chain solana` for the subscription source and status; a missing terminal subscription is fixed on peaq (subscription phase), not by retrying. |
 
 Machine writes reconcile the recorded action before previewing or submitting. Do not treat uncertain receipts as permission for a replacement. EVM activation is one atomic transaction; confirm it with `peaqos machine status <decimal-id> --json`.
 
@@ -111,13 +111,13 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 **Symptom:** Event rejected after 2.0 activation.
 **Fix:** Confirm activation with `machine status`, then check `EVENT_REGISTRY_ADDRESS`: 2.0 machines write to `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e` on mainnet, 1.0 machines to `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`; both accept the call, so a write to the wrong one lands there without an error. The signer must be the machine's owner or operator. Preserve the actual error; do not infer that activation failed.
 
-**Symptom:** Exit 2: `RateLimitExceeded`
-**Cause:** Too many events submitted within the configured time window.
-**Fix:** Wait for the rate limit window to reset, or adjust operational limits.
+**Symptom:** Exit 1: rate limit reached for machine (`RateLimitExceeded` in an SDK integration)
+**Cause:** The SDK's local operational limits (`rate_limit_max_events` / `rate_limit_window_seconds` on the client config) are set; they are 0 (off) by default and the CLI does not set them, so this comes from a custom SDK configuration, not from the chain.
+**Fix:** Wait for the window or raise the limit in that configuration.
 
-**Symptom:** Exit 2: `ValueCapExceeded`
-**Cause:** The event `--value` exceeds the per-transaction cap enforced by the `EventRegistry` contract on-chain. This is a protocol-level limit, not a CLI setting.
-**Fix:** Submit the event with a smaller `--value` (remember it's in ISO 4217 subunits: `1000` = $10.00, not $1000). If your machine genuinely needs a higher cap, contact the peaq team: the limit is configured on the contract, not in the CLI or `.env`.
+**Symptom:** Exit 1: event value exceeds configured cap (`ValueCapExceeded` in an SDK integration)
+**Cause:** The SDK's local `max_value_per_tx` limit is set in that integration's client config; it is 0 (off) by default and the CLI does not set it. It is not an on-chain cap.
+**Fix:** Check the value is in ISO 4217 subunits (`1000` = $10.00) and raise or remove the local limit in the SDK configuration.
 
 ---
 
@@ -126,7 +126,7 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 | Symptom | Exit | Action |
 |---------|------|--------|
 | DID rejected for deployment mode | 1 | With `TOKENOMICS_DEPLOYMENT_ID`, use `did:peaq:<decimal machine id>` at `mcr-20.peaq.xyz`. Without it, use `did:peaq:0x<address>` at `mcr.peaq.xyz`. `show operator machines` always takes an address DID. |
-| Missing private key or legacy address | 3 | Both `qualify mcr` and `show` still build the full SDK client. Supply `PEAQOS_PRIVATE_KEY` and all six legacy addresses in `.env`. |
+| Missing private key or legacy address | 3 | On CLI 0.0.9 `qualify mcr` and `show` build the full SDK client: supply `PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET` plus all six legacy addresses in `.env`. The Solana release reads MCR over HTTP only and never raises this for these commands. |
 | `SERVICE_UNAVAILABLE` | 2 | MCR or its operator index is unavailable or syncing. Retry later. `show machine` also reads MCR; use `machine status <decimal-id> --json` for independent chain state. |
 | Machine not found | 2 | Confirm ID and deployment, then inspect chain state. An indexer delay is possible but is not proof of a successful activation. |
 | Score is 0 or Provisioned | 0 | Inspect submitted event receipts and allow indexing time. Do not promise a score change or exact indexing delay. |
@@ -274,7 +274,7 @@ If you installed from source, pull the latest and reinstall with `pip install -e
 
 **Symptom:** Exit 2: `PAYMENT_RPC_ERROR` / `PAYMENT_TRANSFER_NOT_FOUND`
 **Cause:** The payment transaction was submitted but could not be verified on-chain (RPC lag or wrong chain).
-**Fix:** Check `PEAQOS_RPC_URL` is correct and reachable. If the tx was mined, use `--payment-tx-hash` + `--payment-chain` + `--payment-token` + `--skip-payment` to submit proof manually.
+**Fix:** Check `PEAQOS_RPC_URL` is correct and reachable. If the tx was mined, keep the order ID and tx hash: `scale order create` always creates a new order, also with `--skip-payment` and `--payment-tx-hash`, so rerunning it opens a second order instead of repairing the first. Attach the proof to the existing order through the platform (orchestration API or its operator), then check `scale order status`.
 
 **Symptom:** Order created but execution failed: status stuck at `active`
 **Cause:** The order was created and paid for but the execute step failed.
@@ -322,7 +322,7 @@ If you installed from source, pull the latest and reinstall with `pip install -e
 
 **Symptom:** Exit 2: `Payment confirmation timed out after Ns for order <id>`
 **Cause:** `stream distribute` never saw `status: confirmed` from the confirmation endpoint within `--timeout`.
-**Fix:** Verify the endpoint URL returns JSON with `status`, `buyer_id`, `buyer_public_key_hex`; check the buyer actually paid (`stream pay` / `payproof`); re-run with a longer `--timeout`.
+**Fix:** Verify the endpoint URL returns JSON with `status` (`confirmed`), matching `order_id`, non-empty `tx_hash`, `buyer_id`, `buyer_public_key_hex`; check the buyer actually paid (`stream pay` / `payproof`); re-run with a longer `--timeout`.
 
 **Symptom:** `stream pay --chain solana`: missing dependency error
 **Cause:** Solana extra not installed.

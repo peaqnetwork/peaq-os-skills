@@ -56,6 +56,10 @@ if (command === 'list') {
 }
 
 if (command === 'add') {
+  if (args.includes('--help') || args.includes('-h')) {
+    printHelp();
+    process.exit(0);
+  }
   const opts = parseArgs(args.slice(1));
 
   if (!opts.skill) {

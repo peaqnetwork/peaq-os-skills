@@ -430,7 +430,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`. With it unset, use `did:peaq:0x<address>` at `https://mcr.peaq.xyz`. `show operator machines` always uses an address DID. Both command groups still need `PEAQOS_PRIVATE_KEY` and the six legacy addresses.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`. With it unset, use `did:peaq:0x<address>` at `https://mcr.peaq.xyz`. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; the Solana release reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -541,7 +541,7 @@ peaqos monetize opt-in did:peaq:<decimal-id>
 peaqos monetize opt-out did:peaq:<decimal-id>
 ```
 
-Status is a public read. Opt-in and opt-out are signed off-chain decisions, requiring `PEAQOS_PRIVATE_KEY` for the current owner or controller. Use `--yes` only after consent. State starts at `PENDING`. After an ambiguous PUT timeout, rerun the same command so it reads before writing again. The endpoint comes from the deployment, not `PEAQOS_MCR_API_URL`.
+Status is a public read. Opt-in and opt-out are signed off-chain decisions by the current owner or controller: CLI 0.0.9 signs with `PEAQOS_PRIVATE_KEY`; the Solana release also signs with the active OWS wallet. A Solana-homed machine cannot opt in yet: the SDK refuses with `SOLANA_MONETIZATION_UNVERIFIED` until the deployment marks Solana monetization verified. Use `--yes` only after consent. State starts at `PENDING`. After an ambiguous PUT timeout, rerun the same command so it reads before writing again. The endpoint comes from the deployment, not `PEAQOS_MCR_API_URL`.
 
 For an opted-in machine, `peaqos monetize provision` handles provider setup. Supply `PEAQOS_MANIFEST_REPO_URL` from the peaq team and `PEAQOS_MACHINE_WALLET_ADDRESS` for its payout context. See the CLI reference before running `provision run <provider> --machine <decimal-id>`.
 
@@ -681,7 +681,7 @@ peaqos scale order list --machine-id mach_<id> --limit 20
 peaqos scale order list --machine-id mach_<id> --limit 20 --cursor <cursor-from-previous-output>
 
 # Machine-readable for scripts
-peaqos scale order list --machine-id mach_<id> --json | jq '.orders[] | {id, status, service_id}'
+peaqos scale order list --machine-id mach_<id> --json | jq '.[] | {id, status, service_id}'   # with --limit the output is an envelope: use '.items[]'
 ```
 
 ---
@@ -722,7 +722,7 @@ peaqos stream distribute \
   --order-id ord-001 --delivery s3 --s3 s3://my-bucket/distributes/
 ```
 
-`distribute` blocks (default: poll every 30s, give up after 1h) and prints a pre-signed download URL for the **first** buyer-access file. `--delivery` supports only `s3`: the SDK's machine-to-machine P2P delivery channel has no CLI flag. Exit 2 on a key-commitment mismatch means the wrong owner key. Point `--confirmation-url` only at an endpoint you or your platform control: its response decides who gets access.
+`distribute` blocks (default: poll every 30s, give up after 1h) and prints a pre-signed download URL for the **first** buyer-access file. `--delivery` supports only `s3`: the SDK's machine-to-machine P2P delivery channel has no CLI flag. On `grant`, exit 2 on a key-commitment mismatch means the wrong owner key; `distribute` reports the same mismatch as a validation error at exit 1. Point `--confirmation-url` only at an endpoint you or your platform control: its response decides who gets access.
 
 ### Buyer: pay
 
@@ -737,10 +737,11 @@ peaqos stream pay \
 # Proof only: transfer already done, or the proof step failed
 peaqos stream payproof \
   --tx-hash 0x<hash> --order-id ord-001 --confirmation-url <url> \
-  --chain base --payer-address 0x<buyer> --payee-address 0x<seller> --amount 1.0
+  --chain base --payer-address 0x<buyer> --payee-address 0x<seller> --amount 1.0 \
+  --token-address 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913   # repeat the token of the transfer; omitted means native token
 ```
 
-Chains: `peaq`, `base`, `solana` (`--rpc-url` required for base/solana; solana needs `pip install "peaq-os-sdk[solana]"`). The tx hash prints before the proof step: if proof fails, resubmit with `payproof`, never pay twice.
+Chains: `peaq`, `base`, `solana` (`--rpc-url` required for base/solana; solana needs `pip install "peaq-os-sdk[solana]"` and an active OWS wallet with a Solana account, `PEAQOS_OWS_WALLET`, a raw key is refused). The tx hash prints before the proof step: if proof fails, resubmit with `payproof`, never pay twice.
 
 ### Buyer: decrypt
 

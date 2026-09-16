@@ -492,7 +492,7 @@ peaqos stream consume \
 
 ### `peaqos stream distribute`
 
-Seller: wait for a buyer's payment confirmation, then auto-generate access files (same re-key as `grant`) and deliver them to S3, returning a pre-signed download URL (for the first access file). Polls `--confirmation-url` every `--poll-interval`s (default 30) until confirmed or `--timeout`s (default 3600). The endpoint must return JSON with `status`, `buyer_id`, `buyer_public_key_hex`.
+Seller: wait for a buyer's payment confirmation, then auto-generate access files (same re-key as `grant`) and deliver them to S3, returning a pre-signed download URL (for the first access file). Polls `--confirmation-url` every `--poll-interval`s (default 30) until confirmed or `--timeout`s (default 3600). The endpoint must return JSON with `status` (`confirmed`), the matching `order_id`, a non-empty `tx_hash`, `buyer_id` and `buyer_public_key_hex`; a response missing any of them is retried until the timeout.
 
 ```bash
 peaqos stream distribute \
@@ -529,7 +529,7 @@ peaqos stream pay \
 
 **Optional:** `--confirmation-url`, `--token-address` (omit for native token), `--token-decimals`, `--rpc-url` (**required** for `base` and `solana`), `--private-key-file` (falls back to `PEAQOS_PRIVATE_KEY`), `--json`.
 
-Solana support needs `pip install "peaq-os-sdk[solana]"`.
+Solana support needs `pip install "peaq-os-sdk[solana]"` and signs with the active OWS wallet's Solana account (`PEAQOS_OWS_WALLET`, `OWS_PASSPHRASE` when non-interactive); `--private-key-file` and `PEAQOS_PRIVATE_KEY` cover EVM chains only.
 
 **Exit codes:** 0 success · 1 validation/signing (never leaks key material) · 2 insufficient balance, revert, or proof HTTP failure · 3 config
 

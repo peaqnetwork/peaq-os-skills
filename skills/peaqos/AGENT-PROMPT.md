@@ -37,12 +37,12 @@ Run the following before Phase 1. Surface only blockers:
 ```
 python3 --version 2>/dev/null || echo "MISSING"
 peaqos --version 2>/dev/null || echo "CLI_NOT_INSTALLED"
-pip show peaq-os-sdk 2>/dev/null | grep -i ows || echo "OWS_NOT_INSTALLED"
+pip show open-wallet-standard >/dev/null 2>&1 || echo "OWS_NOT_INSTALLED"   # the ows extra installs the open-wallet-standard package
 ```
 
 - Python < 3.10 or missing → tell user to install Python 3.10+
 - CLI not installed → offer to run install commands (see `GUIDE.md#install`)
-- CLI older than 0.0.9 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else.
+- CLI older than 0.0.9 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else. A `0.0.9.devN` prerelease (the Solana release branch) counts as current, not as older.
 - CLI 0.0.9 or newer → proceed. Scale and Stream are included. If any expected command group is missing, stop and ask the user to upgrade with `pip install -U peaq-os-cli`. Use this one fallback for all groups.
 - OWS installed → store as `OWS_AVAILABLE=true`; the W2.5 wallet path will be offered in Phase 5
 - OWS not installed → store as `OWS_AVAILABLE=false`; surface once, non-blocking:
@@ -150,7 +150,7 @@ Use activity + value 0 for first event: always valid, no FX complexity.
 ```
 peaqos qualify mcr did:peaq:<captured-decimal-id>
 ```
-Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. They need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; on `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
+Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; the Solana release uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
 
 Print a proof block only for verified results. Leave event/rating status pending or failed if that step did not succeed:
 ```
@@ -317,7 +317,7 @@ peaqos qualify event \
 ```
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
-Both this and `show machine` use the MCR service and need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
+Both this and `show machine` use the MCR service; on CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses, the Solana release needs neither (HTTP-only query client); on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
 
 4. Print proof block (same format as Phase 2 demo proof block).
 
@@ -358,7 +358,7 @@ peaqos machine did set-services <decimal-id> --file ./services.json
 peaqos machine relocation status <decimal-id> --destination-rpc-url <url> --destination-deployment-id <deployment-id>
 ```
 
-These are alternatives, not a batch to run. Renew takes no tier. DID setters replace entire arrays. `approve-all` covers all present and future machines of this owner. Transfers retain the controller and are safe by default; do not add `--unsafe` without explaining the risk. Relocation is read-only. Use `knowledge/cli-reference.md` for authority, flags and pending recovery. For monetization use `peaqos monetize status|opt-in|opt-out <decimal-id>` as separate commands; mainnet only, signed decisions require owner or controller.
+These are alternatives, not a batch to run. Renew takes no tier. DID setters replace entire arrays. `approve-all` covers all present and future machines of this owner. Transfers retain the controller and are safe by default; do not add `--unsafe` without explaining the risk. Relocation is read-only. For a Solana-homed machine add `--chain solana` to status, suspend, resume and the DID setters; its transfer exists only as `transfer --unsafe` (no safe transfer on Solana), and `approve` / `approve-all` do not exist there. Use `knowledge/cli-reference.md` for authority, flags and pending recovery. For monetization use `peaqos monetize status|opt-in|opt-out <decimal-id>` as separate commands; mainnet only, signed decisions require owner or controller.
 
 Show output and offer `--json` for scripting.
 
@@ -383,7 +383,7 @@ Before proceeding, verify Scale is available and configured:
 peaqos scale --help >/dev/null 2>&1 && echo "SCALE_OK" || echo "SCALE_MISSING"
 peaqos whoami || echo "NOT_CONFIGURED"
 # For Scale, TOKENOMICS_DEPLOYMENT_ID must be UNSET (see the gate below).
-echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"
+grep -s "^PEAQOS_ORCHESTRATION_URL=." .env || echo "${PEAQOS_ORCHESTRATION_URL:-MISSING}"   # the CLI reads .env itself; the shell does not
 ```
 
 - `SCALE_MISSING` → use the preamble command-group-missing upgrade fallback.
@@ -683,7 +683,7 @@ Exit 2 with a key-commitment mismatch means the **wrong owner key**: the single 
 
 ### T3: Distribute (seller, automatic; CLI 0.0.9+)
 
-Waits for payment confirmation, then grants + delivers to S3 automatically and prints a pre-signed download URL. Collect: chunk dir, owner private key file, the payment-confirmation URL (must return JSON with `status`, `buyer_id`, `buyer_public_key_hex`), the order ID, and the S3 target.
+Waits for payment confirmation, then grants + delivers to S3 automatically and prints a pre-signed download URL. Collect: chunk dir, owner private key file, the payment-confirmation URL (must return JSON with `status` (`confirmed`), the matching `order_id`, a non-empty `tx_hash`, `buyer_id` and `buyer_public_key_hex`), the order ID, and the S3 target.
 
 ```
 peaqos stream distribute \
@@ -702,7 +702,7 @@ Notes to surface:
 
 ### T4: Pay (buyer; CLI 0.0.9+)
 
-Transfer tokens to the seller and (optionally) submit proof in one run. Collect: seller address, amount, chain (`peaq` / `base` / `solana`), order ID; optionally the proof `--confirmation-url`, `--token-address` (omit for native token), and `--rpc-url` (**required** for base and solana; solana also needs `pip install "peaq-os-sdk[solana]"`).
+Transfer tokens to the seller and (optionally) submit proof in one run. Collect: seller address, amount, chain (`peaq` / `base` / `solana`), order ID; optionally the proof `--confirmation-url`, `--token-address` (omit for native token), and `--rpc-url` (**required** for base and solana). Solana also needs `pip install "peaq-os-sdk[solana]"` and signs with the active OWS wallet's Solana account: `PEAQOS_OWS_WALLET` (plus `OWS_PASSPHRASE` non-interactively) is required, a raw key or `--private-key-file` is refused for `--chain solana`.
 
 ⚠️ **Before running the command, echo the seller address, chain, token, and amount back to the user and get an explicit yes.** `stream pay` sends immediately with **no confirmation prompt of its own**, and on-chain transfers are irreversible. Omitting `--token-address` sends the chain's **native** token: confirm that is what the user intends.
 
@@ -712,7 +712,7 @@ peaqos stream pay \
   [--token-address <token>] [--rpc-url <url>] [--confirmation-url <url>]
 ```
 
-The tx hash prints before the proof step: if proof submission fails, do **not** pay again; resubmit with `peaqos stream payproof --tx-hash <hash> --order-id <id> --confirmation-url <url> --chain <chain> --payer-address <buyer> --payee-address <seller> --amount <amt>`.
+The tx hash prints before the proof step: if proof submission fails, do **not** pay again; resubmit with `peaqos stream payproof --tx-hash <hash> --order-id <id> --confirmation-url <url> --chain <chain> --payer-address <buyer> --payee-address <seller> --amount <amt>` and repeat the `--token-address` (and `--token`) of the transfer; omitting it declares a native-token payment.
 
 ---
 

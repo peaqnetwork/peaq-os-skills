@@ -54,7 +54,7 @@ Claude Code discovers skills by scanning `~/.claude/skills/`. Point it at the ad
 ln -s /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
 
 # Option B: copy
-cp -r /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
+cp -r /path/to/peaq-os-skills/skills/peaqos ~/.claude/skills/peaqos   # the whole skill dir; the adapter dir holds only SKILL.md
 ```
 
 Then invoke it from any Claude Code session:

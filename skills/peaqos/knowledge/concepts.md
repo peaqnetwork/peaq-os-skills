@@ -35,12 +35,10 @@ Updated periodically by an off-chain indexer: there's typically a short lag afte
 | ≥ 95  | AAA    |
 | ≥ 85  | AA     |
 | ≥ 75  | A      |
-| ≥ 65  | BBB    |
-| ≥ 55  | BB     |
-| ≥ 45  | B      |
-| ≥ 35  | CCC    |
-| ≥ 30  | CC     |
-| < 30  | NR (no rating) |
+| ≥ 60  | BBB    |
+| ≥ 45  | BB     |
+| ≥ 30  | B      |
+| < 30 or unbonded | NR (no rating) |
 | Fresh machine, no events yet | Provisioned |
 
 **Plain English:** Think of it as a credit score for your machine. Higher scores unlock better

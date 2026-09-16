@@ -28,7 +28,7 @@ Get the `peaqos-skill/` folder onto your machine (clone this repo or receive it 
 ln -s "/path/to/peaqos-skill/adapters/claude-code" ~/.claude/skills/peaqos
 
 # Copy: use this if you just want a stable snapshot
-cp -r /path/to/peaqos-skill/adapters/claude-code ~/.claude/skills/peaqos
+cp -r /path/to/peaq-os-skills/skills/peaqos ~/.claude/skills/peaqos   # the whole skill dir; the adapter dir holds only SKILL.md
 ```
 
 Verify it's picked up by starting a Claude Code session and typing `/peaqos`: the skill should launch immediately. No restart or additional configuration required.
@@ -57,7 +57,7 @@ Using a fresh directory avoids leftover `.env` and `peaqos.log` files interferin
 
 **Purpose:** Verify the skill catches a missing CLI gracefully before Phase 1.
 
-**Setup:** Temporarily rename the binary: `mv $(which peaqos) $(which peaqos).bak`
+**Setup:** Temporarily rename the binary: `P=$(which peaqos); mv "$P" "$P.bak"`
 
 **Steps:**
 1. `/peaqos`
@@ -68,7 +68,7 @@ Using a fresh directory avoids leftover `.env` and `peaqos.log` files interferin
 - Does not proceed to Phase 1 until resolved
 - With CLI older than 0.0.9, tells the user to run `pip install -U peaq-os-cli` before any workflow
 
-**Cleanup:** `mv $(which peaqos).bak $(which peaqos)`
+**Cleanup:** `mv "$P.bak" "$P"` (same shell, `P` from the setup step)
 
 ---
 
@@ -134,7 +134,8 @@ Run through at least two distinct machine profiles and check the recommendation 
    - **D: Submit a heartbeat event**: enter machine ID from S2
 
 **Pass criteria:**
-- Each command executes and returns output (not an error)
+- On agung (S2) A and B exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR) and the skill explains that instead of retrying; on `peaq-mainnet` each command executes and returns output
+- D executes and returns output
 - `--json` piping offered for scriptable output
 - Machine ID / decimal DID from S2 resolves correctly; operator DID stays address-based
 - Lifecycle/subscription/DID recipes check role and consent, replace whole DID arrays, and reconcile pending writes

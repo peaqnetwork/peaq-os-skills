@@ -1,19 +1,17 @@
 ---
 name: peaqos
 description: |
-  Onboard machines and manage fleets with peaqOS,
-  using peaq-os-cli 0.0.9 or newer for Economics 2.0. Also handles Solana/SVM
-  onboarding on mainnet when the installed release ships activate --chain solana. Use this skill when someone asks to: register a machine on
-  peaq, get a peaqID or Machine NFT, manage lifecycle, subscriptions, DID or monetization, submit events,
-  check an MCR score, manage a DePIN fleet, onboard to peaqOS, or connect a machine to the
-  Machine Market. Also handles Scale workflows: registering machines in the market, pairing AI
-  agents, searching for services, placing and managing market orders: including x402
-  pay-per-request services. Also handles Stream workflows: packaging machine data into signed,
-  encrypted chunks, granting or auto-delivering buyer access after payment, and paying for and
-  decrypting purchased data. Handles both agung testnet and mainnet. Adapts tone to developers
-  and non-technical operators alike. Invoke on any mention of peaqOS, peaqID, MCR, machine
-  registration, DePIN onboarding, the peaqos CLI, Machine Market, Scale, agent pairing, market
-  orders, service discovery, Stream, selling machine data, data streams, or x402 payments.
+  Onboard machines and manage fleets with peaqOS (peaq-os-cli 0.0.9 or newer,
+  Economics 2.0), including Solana/SVM onboarding on mainnet once the installed
+  release ships activate --chain solana. Use it when someone asks to register a
+  machine on peaq, get a peaqID or Machine NFT, manage lifecycle, subscriptions,
+  DID or monetization, submit events, check an MCR score, manage a DePIN fleet,
+  or connect a machine to the Machine Market. Covers Scale (market registration,
+  agent pairing, service search, market orders incl. x402) and Stream (signed
+  encrypted data chunks, buyer access after payment, paying for and decrypting
+  data) on agung testnet and mainnet. Invoke on any mention of peaqOS, peaqID,
+  MCR, machine registration, DePIN onboarding, the peaqos CLI, Machine Market,
+  Scale, agent pairing, market orders, Stream, machine data sales or x402.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
 compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.9+; Solana requires the release with --chain solana and SDK solana/ows extras
