@@ -101,7 +101,7 @@ When prompted for "Private key source", recommend `generate` for the demo. If th
 
 The wizard now also asks two Scale-related prompts near the end:
 - **Orchestration API URL**: the default Machine Markets API is `https://orchestration.peaq.xyz`. Paste it when prompted. If the user isn't planning to touch Phase 9 (Scale), they can hit enter to leave it blank: every other phase works without it.
-- **Orchestration API key**: hidden input. Almost always left blank; only set this if the user already has a key from the peaqOS team. If a later Scale command returns `AUTH_REQUIRED`, that's the signal to re-run `peaqos init` (or edit `.env`) and add it.
+- **Orchestration API key**: hidden input. Almost always left blank; only set this if the user already has a key from the peaqOS team. If a later Scale command returns `AUTH_REQUIRED`, add `PEAQOS_ORCH_API_KEY=<key>` to `.env` by hand (not through `peaqos init`, which would also write `TOKENOMICS_DEPLOYMENT_ID` and switch the client into the mode Scale refuses).
 
 After init, run `peaqos whoami`, verify `TOKENOMICS_DEPLOYMENT_ID=agung-2026-08-28`, and show the public output.
 
