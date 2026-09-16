@@ -106,7 +106,7 @@ The wizard now also asks two Scale-related prompts near the end:
 After init, run `peaqos whoami`, verify `TOKENOMICS_DEPLOYMENT_ID=agung-2026-08-28`, and show the public output.
 
 **Verify config before proceeding**
-Known init bug: `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from `GUIDE.md#network-reference`: agung `0x2DAD8905380993940e340C5cE6d313d5c2780040`; mainnet 2.0 `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0 `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`. Check all six legacy addresses and `TOKENOMICS_DEPLOYMENT_ID` before any chain command.
+Known init bug in CLI 0.0.9 (fixed in the Solana release): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from `GUIDE.md#network-reference`: agung `0x2DAD8905380993940e340C5cE6d313d5c2780040`; mainnet 2.0 `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0 `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`. Check all six legacy addresses and `TOKENOMICS_DEPLOYMENT_ID` before any chain command.
 
 **Step 3: Fund wallet**
 Gas station is not available on agung testnet. Walk the user through:
@@ -742,7 +742,7 @@ Route here only for onboarding, activating or homing a machine on Solana (SVM). 
 5. Run a keyless `--dry-run`. With separate consent, invoke `--phase reservation` using the operator wallet, then `--phase subscription` using the same wallet and full original argument set. Approval confirmation is not subscription success.
 6. Wait for external delivery of both reservation and tier mirrors. Preview `--phase native_onboarding`. Once ready and authorized, invoke it using the Solana owner wallet. Each invocation writes only its selected phase.
 7. Keep the same working directory, configuration, original arguments and `peaqos.log`. Native exit 0 is not completion. Only `onboarding_state.evidence.stage.phase` equal to `complete` means done. Rerun the same phase without `--yes` to reconcile, never replace uncertain transactions or erase history.
-8. For current observations use `peaqos machine status <decimal-id> --json`. Solana fallback needs no wallet or journal and reports `status: "observed"` with `native_current_state`. `present` alone does not prove completed linkage. Show pending or conflicting evidence honestly and use full-input reconciliation for the original attempt.
+8. For current observations use `peaqos machine status <decimal-id> --json`. Solana fallback needs no wallet or journal and reports `status: "observed"` with `native_current_state`; `subscription_source` names the account the deployed programs read (`mirror` today), report it as given. `present` alone does not prove completed linkage. Show pending or conflicting evidence honestly and use full-input reconciliation for the original attempt.
 
 ---
 
