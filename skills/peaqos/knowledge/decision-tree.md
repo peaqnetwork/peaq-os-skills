@@ -1,4 +1,4 @@
-# Decision Tree — Architecture Questionnaire
+# Decision Tree: Architecture Questionnaire
 
 Routes an operator to the right onboarding architecture based on 5 questions.
 Read this file at runtime and run the questions via `AskUserQuestion`, one per turn.
@@ -7,17 +7,17 @@ Read this file at runtime and run the questions via `AskUserQuestion`, one per t
 
 ## Questions
 
-Ask these verbatim. Don't paraphrase — the wording maps directly to the matrix rows.
+Ask these verbatim. Don't paraphrase: the wording maps directly to the matrix rows.
 
-**Q1 — Machine type**
+**Q1: Machine type**
 > What kind of machine are you onboarding?
 - A: IoT sensor (temperature, air quality, energy meter, GPS tracker, etc.)
-- B: Edge gateway (Raspberry Pi, Jetson, NUC — runs a real OS, coordinates other devices)
+- B: Edge gateway (Raspberry Pi, Jetson, NUC: runs a real OS, coordinates other devices)
 - C: Cloud VM / container (a process running in AWS, GCP, Azure, k8s, etc.)
-- D: Robot (autonomous physical agent — wheeled, arm, drone)
+- D: Robot (autonomous physical agent: wheeled, arm, drone)
 - E: Consumer device (phone, laptop, wearable, or device not built yet)
 
-**Q2 — Where deployed**
+**Q2: Where deployed**
 > Where does the machine live?
 - A: Cloud / data centre (managed, always-networked)
 - B: On-premises (office, factory floor, server room)
@@ -25,21 +25,21 @@ Ask these verbatim. Don't paraphrase — the wording maps directly to the matrix
 - D: Mobile / vehicle (moves around, connectivity varies)
 - E: Air-gapped / offline (no direct internet access)
 
-**Q3 — Connectivity**
+**Q3: Connectivity**
 > How does the machine connect to the internet?
 - A: Always online (reliable broadband or LTE)
-- B: Intermittent (connects periodically — minutes to hours between windows)
+- B: Intermittent (connects periodically: minutes to hours between windows)
 - C: Relay-only (traffic goes through a gateway or broker; machine can't reach peaq directly)
 - D: Offline / batch (events are collected locally and uploaded later)
 
-**Q4 — Operator access on the device**
+**Q4: Operator access on the device**
 > How much control do you have over the machine's software?
-- A: Root / SSH (you own the runtime — can install packages, set env vars, run any process)
+- A: Root / SSH (you own the runtime: can install packages, set env vars, run any process)
 - B: Service slot (you can deploy a containerised service or sidecar, but not the full OS)
 - C: Black box (you can send commands or read data, but can't run arbitrary code on device)
 - D: Not built yet (the machine is still in development)
 
-**Q5 — Admin wallet situation**
+**Q5: Admin wallet situation**
 > What's your situation with an admin wallet?
 - A: I have one (existing EOA with PEAQ balance or ready to fund on testnet)
 - B: I need to generate one (I'll create a fresh keypair now)
@@ -53,20 +53,31 @@ Ask these verbatim. Don't paraphrase — the wording maps directly to the matrix
 
 | Row | Q1 | Q2 | Q3 | Q4 | Architecture | Trust Level | Notes |
 |-----|----|----|----|----|-------------|-------------|-------|
-| 1 | C (Cloud VM) | A (Cloud) | A (Always) | A (Root) | **A — Self-managed** | L1 | Machine holds its own key; signs everything on-device |
-| 2 | C (Cloud VM) | A (Cloud) | A (Always) | B (Service) | **A — Self-managed** | L1 | Deploy SDK as a sidecar service |
-| 3 | B (Edge GW) | B (On-prem) | A (Always) | A (Root) | **A — Self-managed** | L1 | Gateway has reliable connectivity and root access |
-| 4 | B (Edge GW) | B (On-prem) | B (Intermittent) | A (Root) | **A — Self-managed** | L1 | Buffer events locally; flush when online |
-| 5 | A (IoT sensor) | B (On-prem) | A (Always) | A (Root) | **A — Self-managed** | L1 | Sensor has root and always-on — self is simpler |
-| 6 | A (IoT sensor) | B (On-prem) | B (Intermittent) | A (Root) | **B — Proxy-operator** | L2 | Intermittent; operator gateway relays events |
-| 7 | A (IoT sensor) | C (Customer) | B–D (Any) | B–C (Service/BB) | **B — Proxy-operator** | L2 | No root on customer device; operator controls key |
-| 8 | D (Robot) | B–C (On-prem/Cust) | A (Always) | A (Root) | **A — Self-managed** | L1 | Robot with root and connectivity — self is fine |
-| 9 | D (Robot) | D (Mobile) | B (Intermittent) | A (Root) | **A — Self-managed** | L1 | Buffer + flush; robot holds its own key |
-| 10 | E (Consumer) | C (Customer) | A–B (Any) | C (Black box) | **B — Proxy-operator** | L2 | Consumer device; operator manages key externally |
-| 11 | Any | E (Air-gap) | D (Offline) | Any | **B — Proxy-operator** | L2 | Batch relay — proxy uploads collected events |
-| 12 | Any | Any | Any | C (Black box) | **B — Proxy-operator** | L2 | No code execution on device → proxy always |
+| 1 | C (Cloud VM) | A (Cloud) | A (Always) | A (Root) | **A: Self-owned** | L1 | Machine holds its own key; signs everything on-device |
+| 2 | C (Cloud VM) | A (Cloud) | A (Always) | B (Service) | **A: Self-owned** | L1 | Deploy SDK as a sidecar service |
+| 3 | B (Edge GW) | B (On-prem) | A (Always) | A (Root) | **A: Self-owned** | L1 | Gateway has reliable connectivity and root access |
+| 4 | B (Edge GW) | B (On-prem) | B (Intermittent) | A (Root) | **A: Self-owned** | L1 | Buffer events locally; flush when online |
+| 5 | A (IoT sensor) | B (On-prem) | A (Always) | A (Root) | **A: Self-owned** | L1 | Sensor has root and always-on: self is simpler |
+| 6 | A (IoT sensor) | B (On-prem) | B (Intermittent) | A (Root) | **B: Machine-owned, operator-controlled** | L2 | Intermittent; operator gateway relays events |
+| 7 | A (IoT sensor) | C (Customer) | B–D (Any) | B–C (Service/BB) | **B: Machine-owned, operator-controlled** | L2 | No root on customer device; operator controls key |
+| 8 | D (Robot) | B–C (On-prem/Cust) | A (Always) | A (Root) | **A: Self-owned** | L1 | Robot with root and connectivity: self is fine |
+| 9 | D (Robot) | D (Mobile) | B (Intermittent) | A (Root) | **A: Self-owned** | L1 | Buffer + flush; robot holds its own key |
+| 10 | E (Consumer) | C (Customer) | A–B (Any) | C (Black box) | **B: Machine-owned, operator-controlled** | L2 | Consumer device; operator manages key externally |
+| 11 | Any | E (Air-gap) | D (Offline) | Any | **B: Machine-owned, operator-controlled** | L2 | Batch relay: proxy uploads collected events |
+| 12 | Any | Any | Any | C (Black box) | **B: Machine-owned, operator-controlled** | L2 | No code execution on device → proxy always |
 
 ---
+
+## Ownership rights
+
+Architecture A is self-owned: the configured signer signs, owns and pays. Architecture B is machine-owned, operator-controlled: `--for 0xMachine --machine-key ./machine.key`. The machine signs, owns and pays gas and bond; the configured operator becomes controller and signs nothing during activation. Trust levels in the matrix stay unchanged.
+
+| Role | Can | Cannot |
+|------|-----|--------|
+| Machine wallet (owner) | Transfer NFT; set or clear controller; lifecycle, subscription and DID actions | |
+| Operator (controller) | Suspend, resume, subscription renewals, DID updates | Transfer NFT; set or clear controller |
+
+Transfer uses standard ERC-721 authority and retains the controller. No prior operator activation is required.
 
 ## Tie-breakers (apply in order when no row matches exactly)
 
@@ -90,7 +101,7 @@ Simpler operationally than running two architectures.
 → Ask whether they plan to have root access. If yes → A. If uncertain → B (easier to migrate A→B later than B→A).
 
 **Machine changes class over time** (dev device becomes production black-box):
-→ Registration is permanent (machine ID and DID don't change). Architecture can migrate — A→B requires transferring the key to the operator. Flag this early.
+→ Machine identity is permanent. The owner can set a separate DID controller without transferring the private key. Transferring the NFT retains that controller.
 
 **Q5 = C (KMS/hardware)**:
 → Acknowledge the instinct. v1 of this skill supports hot keys on testnet and mainnet only.
@@ -114,8 +125,8 @@ Operationally:
 - Who signs events: <machine EOA (A) | operator EOA (B)>
 - Key custody: <machine holds its own key (A) | operator holds machine key (B)>
 
-Runner-up: <B|A> — switch if <trigger condition from tie-breaker or edge case>
+Runner-up: <B|A>: switch if <trigger condition from tie-breaker or edge case>
 ```
 
-For Architecture C (Smart Account / ERC-4337): v2 — recommend A for now, can migrate later.
-For Architecture D (Third-party attestation / Trust L3): v2 — onboard with A or B at L1/L2 for now.
+For Architecture C (Smart Account / ERC-4337): v2: recommend A for now, can migrate later.
+For Architecture D (Third-party attestation / Trust L3): v2: onboard with A or B at L1/L2 for now.
