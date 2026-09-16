@@ -42,7 +42,7 @@ pip show open-wallet-standard >/dev/null 2>&1 || echo "OWS_NOT_INSTALLED"   # th
 
 - Python < 3.10 or missing → tell user to install Python 3.10+
 - CLI not installed → offer to run install commands (see `GUIDE.md#install`)
-- CLI older than 0.0.9 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else. A `0.0.9.devN` prerelease (the Solana release branch) counts as current, not as older.
+- CLI older than 0.0.9 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else. A `0.0.9.devN` prerelease (CLI 0.0.10 branch) counts as current, not as older.
 - CLI 0.0.9 or newer → proceed. Scale and Stream are included. If any expected command group is missing, stop and ask the user to upgrade with `pip install -U peaq-os-cli`. Use this one fallback for all groups.
 - OWS installed → store as `OWS_AVAILABLE=true`; the W2.5 wallet path will be offered in Phase 5
 - OWS not installed → store as `OWS_AVAILABLE=false`; surface once, non-blocking:
@@ -106,7 +106,7 @@ The wizard now also asks two Scale-related prompts near the end:
 After init, run `peaqos whoami`, verify `TOKENOMICS_DEPLOYMENT_ID=agung-2026-08-28`, and show the public output.
 
 **Verify config before proceeding**
-Known init bug in CLI 0.0.9 (fixed in the Solana release): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from `GUIDE.md#network-reference`: agung `0x2DAD8905380993940e340C5cE6d313d5c2780040`; mainnet 2.0 `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0 `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`. Check all six legacy addresses and `TOKENOMICS_DEPLOYMENT_ID` before any chain command.
+Known init bug in CLI 0.0.9 (fixed in CLI 0.0.10): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from `GUIDE.md#network-reference`: agung `0x2DAD8905380993940e340C5cE6d313d5c2780040`; mainnet 2.0 `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0 `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`. Check all six legacy addresses and `TOKENOMICS_DEPLOYMENT_ID` before any chain command.
 
 **Step 3: Fund wallet**
 Gas station is not available on agung testnet. Walk the user through:
@@ -150,7 +150,7 @@ Use activity + value 0 for first event: always valid, no FX complexity.
 ```
 peaqos qualify mcr did:peaq:<captured-decimal-id>
 ```
-Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; the Solana release uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
+Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; CLI 0.0.10 uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
 
 Print a proof block only for verified results. Leave event/rating status pending or failed if that step did not succeed:
 ```
@@ -317,7 +317,7 @@ peaqos qualify event \
 ```
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
-Both this and `show machine` use the MCR service; on CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses, the Solana release needs neither (HTTP-only query client); on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
+Both this and `show machine` use the MCR service; on CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses, CLI 0.0.10 needs neither (HTTP-only query client); on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
 
 4. Print proof block (same format as Phase 2 demo proof block).
 
@@ -740,9 +740,9 @@ Route here only for onboarding, activating or homing a machine on Solana (SVM). 
 3. Create two OWS wallets using `peaqos wallet create`: a peaq operator paying peaq gas and bond, and a Solana owner paying SOL fees and rent. Fund both public addresses. Select each through `PEAQOS_OWS_WALLET` per phase and clear raw-key overrides as in the guide.
 4. Collect the original identity, base58 manufacturer and Solana owner, optional EVM operator assertion and Solana controller, tier `basic` or `pro`, DID contents and explicit budgets. Write the DID using `GUIDE.md#did-document`. Use the guide's shared argument array with `--chain solana`, `--max-net-peaq-amount` (or `--payment usdt --max-usdt-amount`), `--max-native-fee-lamports`, `--max-native-rent-lamports`, `--from-block`, `--compute-unit-limit` and `--compute-unit-price-micro-lamports`. Zero is strict. Reject `--for`, `--machine-key`, `--slippage-bps` and tier `entry`.
 5. Run a keyless `--dry-run`. With separate consent, invoke `--phase reservation` using the operator wallet, then `--phase subscription` using the same wallet and full original argument set. Approval confirmation is not subscription success.
-6. Wait for external delivery of both reservation and tier mirrors. Preview `--phase native_onboarding`. Once ready and authorized, invoke it using the Solana owner wallet. Each invocation writes only its selected phase.
+6. Wait for the reservation mirror and for the `SubscriptionTerminal` account to read Active or Grace with a non-zero sequence. Preview `--phase native_onboarding`. Once ready and authorized, invoke it using the Solana owner wallet. Each invocation writes only its selected phase.
 7. Keep the same working directory, configuration, original arguments and `peaqos.log`. Native exit 0 is not completion. Only `onboarding_state.evidence.stage.phase` equal to `complete` means done. Rerun the same phase without `--yes` to reconcile, never replace uncertain transactions or erase history.
-8. For current observations use `peaqos machine status <decimal-id> --json`. Solana fallback needs no wallet or journal and reports `status: "observed"` with `native_current_state`; `subscription_source` names the account the deployed programs read (`mirror` today), report it as given. `present` alone does not prove completed linkage. Show pending or conflicting evidence honestly and use full-input reconciliation for the original attempt.
+8. For current observations use `peaqos machine status <decimal-id> --json`. Solana fallback needs no wallet or journal and reports `status: "observed"` with `native_current_state`; `subscription_source` names the account the deployed programs read (`terminal` since CLI 0.0.10), report it as given. `present` alone does not prove completed linkage. Show pending or conflicting evidence honestly and use full-input reconciliation for the original attempt.
 
 ---
 

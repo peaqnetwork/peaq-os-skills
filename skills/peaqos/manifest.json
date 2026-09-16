@@ -27,7 +27,7 @@
     "pypi": true,
     "install_from_source": "https://github.com/peaqnetwork/peaq-os-cli-py",
     "python_min": "3.10",
-    "notes": "Requires CLI 0.0.9 or newer and Python 3.10 or newer. Solana needs the SDK [solana] extra, [ows] for the wallet flow, and the release with activate --chain solana. If a command group is missing, upgrade with pip install -U peaq-os-cli. Check the Solana gate before onboarding."
+    "notes": "Requires CLI 0.0.9 or newer and Python 3.10 or newer. Solana needs CLI 0.0.10 or newer with peaq-os-sdk 0.7.2 (released 2026-09-16), the SDK [solana] extra and [ows] for the wallet flow. If a command group is missing, upgrade with pip install -U peaq-os-cli. Check the Solana gate before onboarding."
   },
   "keywords": [
     "peaq",

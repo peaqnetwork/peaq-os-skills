@@ -34,7 +34,7 @@ peaqos init --non-interactive  # read all values from env vars
 ```
 
 
-  **`EVENT_REGISTRY_ADDRESS` is the one legacy address the wizard does not fill in (still the case in 0.0.9, checked 2026-09-14; fixed in the Solana release, where the prompt defaults to the network's Event Registry and `--non-interactive` takes the network default when the shell variable is unset).** On mainnet the other five come from the network defaults (fetched from GitHub at init time; empty when offline); on agung only `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` have defaults, so `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` also stay empty and must be filled by hand from `examples/.env.example`; the Event Registry prompt has no default, and `--non-interactive` writes whatever `EVENT_REGISTRY_ADDRESS` holds in your shell, empty if unset. With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts).
+  **`EVENT_REGISTRY_ADDRESS` is the one legacy address the wizard does not fill in (still the case in 0.0.9, checked 2026-09-14; fixed in CLI 0.0.10, where the prompt defaults to the network's Event Registry and `--non-interactive` takes the network default when the shell variable is unset).** On mainnet the other five come from the network defaults (fetched from GitHub at init time; empty when offline); on agung only `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` have defaults, so `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` also stay empty and must be filled by hand from `examples/.env.example`; the Event Registry prompt has no default, and `--non-interactive` writes whatever `EVENT_REGISTRY_ADDRESS` holds in your shell, empty if unset. With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts).
 
 
 ## `peaqos whoami`
@@ -48,7 +48,7 @@ peaqos whoami
 ## `peaqos activate`
 
 
-  **Upgrade the SDK underneath the CLI.** `InfoDesk` re-pointed `MACHINE_BRIDGE_ADAPTER` on 2026-09-08 and `peaq-os-sdk` 0.7.1 (2026-09-11) carries the new address. A fresh `pip install peaq-os-cli` resolves a 0.7.x SDK (0.7.1 today; CLI 0.0.9 pins `>=0.7.1,<0.8.0`, the Solana release `>=0.7.1.dev1,<0.8.0`), which clears the `PEER_MISMATCH` check; `peaq-mainnet` activation and renewal still fail on the `fullMode()` read until the CORE-777 SDK release (see the exit-code section). An environment installed before 2026-09-11 fails every `peaq-mainnet` write with `PEER_MISMATCH` until you run `pip install -U peaq-os-sdk`.
+  **Upgrade the SDK underneath the CLI.** `InfoDesk` re-pointed `MACHINE_BRIDGE_ADAPTER` on 2026-09-08 and `peaq-os-sdk` 0.7.1 (2026-09-11) carries the new address. A fresh `pip install peaq-os-cli` resolves a 0.7.x SDK (0.7.1 today; CLI 0.0.9 pins `>=0.7.1,<0.8.0`, CLI 0.0.10 `>=0.7.1.dev1,<0.8.0`), which clears the `PEER_MISMATCH` check; `peaq-mainnet` activation and renewal still fail on the `fullMode()` read until the CORE-777 SDK release (see the exit-code section). An environment installed before 2026-09-11 fails every `peaq-mainnet` write with `PEER_MISMATCH` until you run `pip install -U peaq-os-sdk`.
 
 
 Onboard a machine in **one atomic transaction**. `MachineStateAndSync.activateMachine` mints the ERC-721, stores the DID document, bonds the subscription tier, and registers the home chain in a single call. Mirrors the [Activate](https://docs.peaq.xyz/peaqos/functions/activate) flow. Requires `TOKENOMICS_DEPLOYMENT_ID`.
@@ -149,7 +149,7 @@ The four CLI-wide exit codes apply. Once input validation has passed, every `act
 | `2` | `ORACLE_UNPRICED` (contracts reachable, no PEAQ price committed), `INSUFFICIENT_PEAQ`, `QUOTE_MOVED`, `TX_REVERTED`, `EVENT_MISMATCH`, `PENDING`, `ALREADY_ACTIVATED_RACE`, `TECHNICALLY_PAUSED` (protocol pause; the flags are read before the first approval, an approval that already confirmed stays spent) |
 | `3` | `TOKENOMICS_NOT_CONFIGURED`, `DEPLOYMENT_UNKNOWN`, `CHAIN_MISMATCH`, `PEER_MISMATCH`, `ADDRESSES_UNSET` (network supported, contracts not deployed there) |
 
-Two codes come with the CORE-777 contract change of 2026-09-15 (SDK fixes in `peaq-os-sdk-js` #96 and `peaq-os-sdk-py` #98): `NOT_ECONOMIC_AUTHORITY` replaces `NOT_FULL_MODE` and means the selected deployment's `MachineSubscription` is not the economic authority (CLI 0.0.9 has no row for it and reports `ACTIVATION_FAILED` at exit `2`; the Solana release maps it to exit `3`), and `TECHNICALLY_PAUSED` means activation, renewal or the Solana `subscription` phase read a set `MachineStateAndSync` pause flag (exit `2` on every command; an approval that confirmed before the pause stays spent). Until the fixed SDK is published, `peaq-mainnet` activation and renewal fail with `RPC_FAILED` naming `fullMode()`; see `troubleshooting.md`.
+Two codes come with the CORE-777 contract change of 2026-09-15 (SDK fixes in `peaq-os-sdk-js` #96 and `peaq-os-sdk-py` #98): `NOT_ECONOMIC_AUTHORITY` replaces `NOT_FULL_MODE` and means the selected deployment's `MachineSubscription` is not the economic authority (CLI 0.0.9 has no row for it and reports `ACTIVATION_FAILED` at exit `2`; CLI 0.0.10 maps it to exit `3`), and `TECHNICALLY_PAUSED` means activation, renewal or the Solana `subscription` phase read a set `MachineStateAndSync` pause flag (exit `2` on every command; an approval that confirmed before the pause stays spent). Until the fixed SDK is published, `peaq-mainnet` activation and renewal fail with `RPC_FAILED` naming `fullMode()`; see `troubleshooting.md`.
 
 #### Pending transactions and `peaqos.log`
 
@@ -157,9 +157,9 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 ### Solana activation (`--chain solana`, release of 2026-09-16)
 
-Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.9 does not imply this feature is available.
+Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.10 (2026-09-16) ships it; 0.0.9 does not.
 
-`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause before the first approval fails with `TECHNICALLY_PAUSED` and spends nothing; after a confirmed approval the same code leaves that approval in place. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
+`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` once the reservation mirror and the `SubscriptionTerminal` account (Active or Grace, non-zero sequence) are ready. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause before the first approval fails with `TECHNICALLY_PAUSED` and spends nothing; after a confirmed approval the same code leaves that approval in place. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
 
 | Solana option | Meaning |
 | --- | --- |
@@ -183,13 +183,13 @@ Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the u
 
 Rejects `--for`, `--machine-key`, `--slippage-bps` and tier `entry`. Zero ceilings are strict. Compute limit is 1 to 1,400,000. Keep all original inputs unchanged, including payment, ceilings, compute settings and inclusive peaq history start.
 
-Create two OWS wallets with `peaqos wallet create`. Select the peaq operator through `PEAQOS_OWS_WALLET` for reservation and subscription. It pays peaq gas and the bond. Select the Solana owner for native onboarding; it pays SOL fees and rent. Subscription approval and activation are separate transactions. Wait for external delivery of both mirrors before native creation.
+Create two OWS wallets with `peaqos wallet create`. Select the peaq operator through `PEAQOS_OWS_WALLET` for reservation and subscription. It pays peaq gas and the bond. Select the Solana owner for native onboarding; it pays SOL fees and rent. Subscription approval and activation are separate transactions. Wait for the reservation mirror and the subscription terminal status before native creation.
 
 Keep the same working directory and `peaqos.log`. Native exit 0 can leave linkage pending. Only `onboarding_state.evidence.stage.phase == "complete"` means complete. Rerun the same phase without `--yes` to reconcile without resubmission. See [the full guide](../GUIDE.md#solana) for the shared argument array and commands.
 
 With SVM configuration, `whoami` displays the requested cluster and available metadata without verifying it. Root `--svm-network` and `--svm-rpc-url` override environment, then dotenv settings.
 
-`peaqos machine status <decimal-id> --json` falls back to Solana for missing or foreign-home EVM records. It needs no wallet or journal. Output has `status: "observed"` and `native_current_state`, separating finalized peaq and confirmed Solana observations, and names the subscription account the deployed programs read (`subscription_source`, `mirror` for the shipped record) next to the mirror and terminal evidence; unread values are `null`. Successful pending/conflicting observations exit 0; unavailable config exits 3; read failures exit 2. `present` alone does not prove completed onboarding.
+`peaqos machine status <decimal-id> --json` falls back to Solana for missing or foreign-home EVM records. It needs no wallet or journal. Output has `status: "observed"` and `native_current_state`, separating finalized peaq and confirmed Solana observations, and names the subscription account the deployed programs read (`subscription_source`, `terminal` since CLI 0.0.10) next to the mirror and terminal evidence; unread values are `null`. Successful pending/conflicting observations exit 0; unavailable config exits 3; read failures exit 2. `present` alone does not prove completed onboarding.
 
 ## `peaqos machine`
 
@@ -299,7 +299,7 @@ Event submitted.
 
 ## `peaqos qualify mcr`
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr-20.peaq.xyz`. Without a deployment ID, use `did:peaq:0x<address>` against `https://mcr.peaq.xyz`. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; the Solana release moves them to an HTTP-only query client that needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr-20.peaq.xyz`. Without a deployment ID, use `did:peaq:0x<address>` against `https://mcr.peaq.xyz`. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; CLI 0.0.10 moves them to an HTTP-only query client that needs neither.
 
 ```bash
 peaqos qualify mcr did:peaq:<decimal-id>

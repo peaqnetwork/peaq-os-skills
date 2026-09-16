@@ -58,7 +58,7 @@ When prompted:
 - **Orchestration API URL:** the default Machine Markets API is `https://orchestration.peaq.xyz`. Use that unless your platform admin gave you a different URL. If you're not planning to use Scale (Phase 9), hit enter to leave it blank.
 - **Orchestration API key:** leave blank unless your deployment requires one. If you later see an `AUTH_REQUIRED` error from a Scale command, that's the signal to set this and re-run.
 
-Known init bug in CLI 0.0.9 (fixed in the Solana release, where the prompt defaults to the network's Event Registry): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from the network table below and verify all six legacy addresses; on agung, IdentityRegistry, IdentityStaking and MachineNFT are written empty too. They are still required by the SDK constructor.
+Known init bug in CLI 0.0.9 (fixed in CLI 0.0.10, where the prompt defaults to the network's Event Registry): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from the network table below and verify all six legacy addresses; on agung, IdentityRegistry, IdentityStaking and MachineNFT are written empty too. They are still required by the SDK constructor.
 
 Run `peaqos whoami`. Verify Chain ID 9990 and the `Tokenomics 2.0:` block with deployment `agung-2026-08-28`.
 
@@ -284,7 +284,7 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
-This path needs the release that ships `peaqos activate --chain solana` and a matching SDK with staged onboarding APIs and the `[solana]` and `[ows]` extras. CLI 0.0.9 alone does not provide it.
+This path needs `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.7.2 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16). CLI 0.0.9 does not provide it.
 
 ```bash
 peaqos activate --help | grep -q -- '--chain'
@@ -352,7 +352,7 @@ PEAQOS_OWS_WALLET=svm-test-operator peaqos activate "${COMMON_ARGS[@]}" --phase 
 peaqos activate "${COMMON_ARGS[@]}" --phase subscription --dry-run
 PEAQOS_OWS_WALLET=svm-test-operator peaqos activate "${COMMON_ARGS[@]}" --phase subscription --yes
 
-# Wait for external delivery of BOTH reservation and tier mirrors
+# Wait for the reservation mirror AND the subscription terminal status (Active or Grace)
 peaqos activate "${COMMON_ARGS[@]}" --phase native_onboarding --dry-run
 # Only when the SDK reports readiness and the user accepts the native phase:
 PEAQOS_OWS_WALLET=svm-test-owner peaqos activate "${COMMON_ARGS[@]}" --phase native_onboarding --yes
@@ -430,7 +430,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`. With it unset, use `did:peaq:0x<address>` at `https://mcr.peaq.xyz`. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; the Solana release reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`. With it unset, use `did:peaq:0x<address>` at `https://mcr.peaq.xyz`. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -541,7 +541,7 @@ peaqos monetize opt-in did:peaq:<decimal-id>
 peaqos monetize opt-out did:peaq:<decimal-id>
 ```
 
-Status is a public read. Opt-in and opt-out are signed off-chain decisions by the current owner or controller: CLI 0.0.9 signs with `PEAQOS_PRIVATE_KEY`; the Solana release also signs with the active OWS wallet. A Solana-homed machine cannot opt in yet: the SDK refuses with `SOLANA_MONETIZATION_UNVERIFIED` until the deployment marks Solana monetization verified. Use `--yes` only after consent. State starts at `PENDING`. After an ambiguous PUT timeout, rerun the same command so it reads before writing again. The endpoint comes from the deployment, not `PEAQOS_MCR_API_URL`.
+Status is a public read. Opt-in and opt-out are signed off-chain decisions by the current owner or controller: CLI 0.0.9 signs with `PEAQOS_PRIVATE_KEY`; CLI 0.0.10 also signs with the active OWS wallet. A Solana-homed machine cannot opt in yet: the SDK refuses with `SOLANA_MONETIZATION_UNVERIFIED` until the deployment marks Solana monetization verified. Use `--yes` only after consent. State starts at `PENDING`. After an ambiguous PUT timeout, rerun the same command so it reads before writing again. The endpoint comes from the deployment, not `PEAQOS_MCR_API_URL`.
 
 For an opted-in machine, `peaqos monetize provision` handles provider setup. Supply `PEAQOS_MANIFEST_REPO_URL` from the peaq team and `PEAQOS_MACHINE_WALLET_ADDRESS` for its payout context. See the CLI reference before running `provision run <provider> --machine <decimal-id>`.
 
