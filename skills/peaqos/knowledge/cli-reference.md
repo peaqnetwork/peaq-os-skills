@@ -474,7 +474,7 @@ peaqos stream consume \
   --buyer-id did:peaq:0x<buyer> \
   --output ./recovered.bin
 
-# Remote mode : fetch a self-contained release bundle
+# Remote mode: fetch a self-contained release bundle
 peaqos stream consume \
   --download-url "https://bundles.example.com/releases/ord-001/" \
   --buyer-private-key-file ./buyer-x25519.key \
