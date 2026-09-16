@@ -150,7 +150,7 @@ Use activity + value 0 for first event: always valid, no FX complexity.
 ```
 peaqos qualify mcr did:peaq:<captured-decimal-id>
 ```
-Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. They still need `PEAQOS_PRIVATE_KEY` and all six legacy addresses. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
+Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. They need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; on `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
 
 Print a proof block only for verified results. Leave event/rating status pending or failed if that step did not succeed:
 ```
@@ -317,11 +317,11 @@ peaqos qualify event \
 ```
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
-Both this and `show machine` use the MCR service and need the private key and six legacy addresses. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
+Both this and `show machine` use the MCR service and need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
 
 4. Print proof block (same format as Phase 2 demo proof block).
 
-Failure branches: read `knowledge/troubleshooting.md` and use the stable `error_code`. `PENDING` means reconcile `peaqos.log`, never replace the transaction. `PEER_MISMATCH` on mainnet requires SDK 0.7.1 or newer. `RPC_FAILED` naming `MachineSubscription.fullMode()` requires `pip install -U peaq-os-cli peaq-os-sdk`. `NOT_ECONOMIC_AUTHORITY` means the selected deployment is not the economic authority: use a peaq deployment, not another RPC. `TECHNICALLY_PAUSED` means a protocol pause blocked the write before any approval, nothing was spent: wait, then preview again.
+Failure branches: read `knowledge/troubleshooting.md` and use the stable `error_code`. `PENDING` means reconcile `peaqos.log`, never replace the transaction. `PEER_MISMATCH` on mainnet requires SDK 0.7.1 or newer. `RPC_FAILED` naming `MachineSubscription.fullMode()` requires `pip install -U peaq-os-cli peaq-os-sdk`. `NOT_ECONOMIC_AUTHORITY` means the selected deployment is not the economic authority: use a peaq deployment, not another RPC. `TECHNICALLY_PAUSED` means a protocol pause blocked the write; check the reported transactions, an approval may already have confirmed and its allowance stays: wait, then preview again.
 
 ---
 

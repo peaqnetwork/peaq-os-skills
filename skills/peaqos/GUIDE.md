@@ -54,11 +54,11 @@ When prompted:
 - **Deployment ID:** `agung-2026-08-28` (`TOKENOMICS_DEPLOYMENT_ID`, required by activate, machine and monetize).
 - **MCR API URL:** `https://mcr.peaq.xyz`
 - **Gas Station URL:** leave blank (not available on agung)
-- **Contract addresses:** enter the agung values from `examples/.env.example`
+- **Event Registry address:** the only contract address the wizard asks for; enter the agung value from `examples/.env.example`. `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` have no agung default either: fill them in `.env` after the wizard.
 - **Orchestration API URL:** the default Machine Markets API is `https://orchestration.peaq.xyz`. Use that unless your platform admin gave you a different URL. If you're not planning to use Scale (Phase 9), hit enter to leave it blank.
 - **Orchestration API key:** leave blank unless your deployment requires one. If you later see an `AUTH_REQUIRED` error from a Scale command, that's the signal to set this and re-run.
 
-Known init bug: `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from the network table below and verify all six legacy addresses. They are still required by the SDK constructor.
+Known init bug: `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from the network table below and verify all six legacy addresses; on agung, IdentityRegistry, IdentityStaking and MachineNFT are written empty too. They are still required by the SDK constructor.
 
 Run `peaqos whoami`. Verify Chain ID 9990 and the `Tokenomics 2.0:` block with deployment `agung-2026-08-28`.
 
@@ -130,7 +130,7 @@ Event submitted.
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, reads go to `mcr-20.peaq.xyz`. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr-20.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
 
 ---
 
@@ -188,7 +188,7 @@ peaqos wallet use my-operator                # set as active in .env
 export OWS_PASSPHRASE="your-vault-passphrase"
 ```
 
-Commands using the wallet-aware client can sign through OWS. `qualify mcr` and `show` still require `PEAQOS_PRIVATE_KEY` and the legacy addresses; monetization writes require `PEAQOS_PRIVATE_KEY`. Follow the command-specific requirements.
+Commands using the wallet-aware client can sign through OWS. `qualify mcr` and `show` build an SDK client too, so they take `PEAQOS_OWS_WALLET` or `PEAQOS_PRIVATE_KEY` plus the legacy addresses; monetization writes require `PEAQOS_PRIVATE_KEY`. Follow the command-specific requirements.
 
 **Useful wallet commands:**
 ```bash
@@ -486,7 +486,7 @@ peaqos machine relocation status MACHINE_ID --destination-rpc-url URL --destinat
 
 Every write accepts `--yes` and `--json`; every read accepts `--json`. Machine IDs are full-width `uint256`: pass them as canonical unsigned decimal (no `0x`, no leading zeros) and read them back as decimal strings.
 
-Every write runs the same sequence: validate locally, reconcile the journal (a pending transaction for the same action and machine blocks rather than repeats), ask the SDK for a preview (chain, contract, method, current state, intended effect), show it and ask, then submit once and record the hash before waiting for the receipt. Reruns reconcile the recorded hash and never resubmit.
+Every write runs the same sequence: validate locally, reconcile the journal (a pending transaction for the same action and machine blocks rather than repeats), ask the SDK for a preview (chain, contract, method, current state, intended effect), show it and ask, then submit once and record the hash before waiting for the receipt. A rerun reconciles an unresolved (pending) hash instead of resubmitting; once that outcome is recorded as confirmed, the next rerun is a new write and asks for consent again. Check state with `machine status`, never rerun a write with `--yes` to look.
 
 Details that matter:
 

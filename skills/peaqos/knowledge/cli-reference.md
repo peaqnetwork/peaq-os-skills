@@ -25,7 +25,7 @@ pip install peaq-os-cli
 
 ## `peaqos init`
 
-Interactive wizard that scaffolds a `.env` with the required peaqOS variables. Prompts for network, private key source (`paste`, `generate`, or `wallet`), RPC URL, the Economics 2.0 deployment ID (`TOKENOMICS_DEPLOYMENT_ID`, default `peaq-mainnet` on mainnet and `agung-2026-08-28` on testnet), MCR API URL, Gas Station URL, the six Tokenomics 1.0 contract addresses (labelled legacy, still required by the SDK constructor), and (optionally) `PEAQOS_ORCHESTRATION_URL` + `PEAQOS_ORCH_API_KEY` for Machine Markets. The orchestration key is masked in any echoed or logged output. The `wallet` path creates a new OWS vault wallet and writes `PEAQOS_OWS_WALLET=<name>` instead of `PEAQOS_PRIVATE_KEY`. Writes `.env` with `0o600` permissions and auto-runs `whoami` to verify.
+Interactive wizard that scaffolds a `.env` with the required peaqOS variables. Prompts for network, private key source (`paste`, `generate`, or `wallet`), RPC URL, the Economics 2.0 deployment ID (`TOKENOMICS_DEPLOYMENT_ID`, default `peaq-mainnet` on mainnet and `agung-2026-08-28` on testnet), MCR API URL, Gas Station URL, the Event Registry address (the only one of the six Tokenomics 1.0 contract addresses it asks for; the other five are written from the network defaults, see the note below), and (optionally) `PEAQOS_ORCHESTRATION_URL` + `PEAQOS_ORCH_API_KEY` for Machine Markets. The orchestration key is masked in any echoed or logged output. The `wallet` path creates a new OWS vault wallet and writes `PEAQOS_OWS_WALLET=<name>` instead of `PEAQOS_PRIVATE_KEY`. Writes `.env` with `0o600` permissions and auto-runs `whoami` to verify.
 
 ```bash
 peaqos init
@@ -34,7 +34,7 @@ peaqos init --non-interactive  # read all values from env vars
 ```
 
 
-  **`EVENT_REGISTRY_ADDRESS` is the one legacy address the wizard does not fill in (still the case in 0.0.9, checked 2026-09-14).** The other five come from the network defaults; the Event Registry prompt has no default, and `--non-interactive` writes whatever `EVENT_REGISTRY_ADDRESS` holds in your shell, empty if unset. With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts).
+  **`EVENT_REGISTRY_ADDRESS` is the one legacy address the wizard does not fill in (still the case in 0.0.9, checked 2026-09-14).** On mainnet the other five come from the network defaults (fetched from GitHub at init time; empty when offline); on agung only `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` have defaults, so `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` also stay empty and must be filled by hand from `examples/.env.example`; the Event Registry prompt has no default, and `--non-interactive` writes whatever `EVENT_REGISTRY_ADDRESS` holds in your shell, empty if unset. With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts).
 
 
 ## `peaqos whoami`
@@ -48,7 +48,7 @@ peaqos whoami
 ## `peaqos activate`
 
 
-  **Upgrade the SDK underneath the CLI.** `InfoDesk` re-pointed `MACHINE_BRIDGE_ADAPTER` on 2026-09-08 and `peaq-os-sdk` 0.7.1 (2026-09-11) carries the new address. A fresh `pip install peaq-os-cli` resolves 0.7.1 and passes preflight. An environment installed before 2026-09-11 fails every `peaq-mainnet` write with `PEER_MISMATCH` until you run `pip install -U peaq-os-sdk`.
+  **Upgrade the SDK underneath the CLI.** `InfoDesk` re-pointed `MACHINE_BRIDGE_ADAPTER` on 2026-09-08 and `peaq-os-sdk` 0.7.1 (2026-09-11) carries the new address. A fresh `pip install peaq-os-cli` resolves a 0.7.x SDK (0.7.1 today; the CLI pins `>=0.7.1,<0.8.0`), which clears the `PEER_MISMATCH` check; `peaq-mainnet` activation and renewal still fail on the `fullMode()` read until the CORE-777 SDK release (see the exit-code section). An environment installed before 2026-09-11 fails every `peaq-mainnet` write with `PEER_MISMATCH` until you run `pip install -U peaq-os-sdk`.
 
 
 Onboard a machine in **one atomic transaction**. `MachineStateAndSync.activateMachine` mints the ERC-721, stores the DID document, bonds the subscription tier, and registers the home chain in a single call. Mirrors the [Activate](https://docs.peaq.xyz/peaqos/functions/activate) flow. Requires `TOKENOMICS_DEPLOYMENT_ID`.
@@ -140,16 +140,16 @@ Progress, the preview, and prompts go to stderr; stdout carries only the final s
 }
 ```
 
-The four CLI-wide exit codes apply. Once input validation has passed, every `activate` outcome is a JSON report (with `--json`) whose failures carry a stable `error_code`, bracketed in human output; success and preview reports set `error_code` to `null` and report a `status` instead: `preview`, `activated`, `already_active`, or `pending`. Input and flag errors before that point exit `1` with a plain message and no report. The codes to know:
+The four CLI-wide exit codes apply. Once input validation has passed, every `activate` outcome is a JSON report (with `--json`) whose failures carry a stable `error_code`, bracketed in human output; success and preview reports have no `error_code` key and report a `status` instead: `preview`, `activated`, `already_active`, or `pending`. Before that point there is no report: the CLI's own input validation exits `1` with a plain message, values Click itself rejects (an unknown option, a `--tier` outside entry/basic/pro) exit `2` with a usage message, and a missing or wrong Economics 2.0 configuration exits `3` with a plain message. The codes to know:
 
 | Exit | `error_code` examples |
 | :-- | :-- |
 | `0` | none; `status` is `activated` or `already_active` |
-| `1` | `INVALID_INPUT`, `CANCELLED_BEFORE_SUBMIT` (confirmation declined), `SPONSORED_UNSUPPORTED`, `INVALID_TIER` |
-| `2` | `ORACLE_UNPRICED` (contracts reachable, no PEAQ price committed), `INSUFFICIENT_PEAQ`, `QUOTE_MOVED`, `TX_REVERTED`, `EVENT_MISMATCH`, `PENDING`, `ALREADY_ACTIVATED_RACE`, `TECHNICALLY_PAUSED` (protocol pause read before any approval, nothing spent) |
+| `1` | `INVALID_INPUT`, `CANCELLED_BEFORE_SUBMIT` (interrupted before anything was submitted; declining the prompt exits 1 with a plain message and no report), `SPONSORED_UNSUPPORTED`, `INVALID_TIER` |
+| `2` | `ORACLE_UNPRICED` (contracts reachable, no PEAQ price committed), `INSUFFICIENT_PEAQ`, `QUOTE_MOVED`, `TX_REVERTED`, `EVENT_MISMATCH`, `PENDING`, `ALREADY_ACTIVATED_RACE`, `TECHNICALLY_PAUSED` (protocol pause; the flags are read before the first approval, an approval that already confirmed stays spent) |
 | `3` | `TOKENOMICS_NOT_CONFIGURED`, `DEPLOYMENT_UNKNOWN`, `CHAIN_MISMATCH`, `PEER_MISMATCH`, `ADDRESSES_UNSET` (network supported, contracts not deployed there) |
 
-Two codes come with the CORE-777 contract change of 2026-09-15 (SDK fixes in `peaq-os-sdk-js` #96 and `peaq-os-sdk-py` #98): `NOT_ECONOMIC_AUTHORITY` replaces `NOT_FULL_MODE` and means the selected deployment's `MachineSubscription` is not the economic authority (a CLI release without a row for it reports `ACTIVATION_FAILED` at exit `2`; the mapped release uses exit `3`), and `TECHNICALLY_PAUSED` means activation, renewal or the Solana `subscription` phase read a set `MachineStateAndSync` pause flag before any approval. Until the fixed SDK is published, `peaq-mainnet` activation and renewal fail with `RPC_FAILED` naming `fullMode()`; see `troubleshooting.md`.
+Two codes come with the CORE-777 contract change of 2026-09-15 (SDK fixes in `peaq-os-sdk-js` #96 and `peaq-os-sdk-py` #98): `NOT_ECONOMIC_AUTHORITY` replaces `NOT_FULL_MODE` and means the selected deployment's `MachineSubscription` is not the economic authority (a CLI release without a row for it reports `ACTIVATION_FAILED` at exit `2`; the mapped release uses exit `3`), and `TECHNICALLY_PAUSED` means activation, renewal or the Solana `subscription` phase read a set `MachineStateAndSync` pause flag (exit `2` on every command; an approval that confirmed before the pause stays spent). Until the fixed SDK is published, `peaq-mainnet` activation and renewal fail with `RPC_FAILED` naming `fullMode()`; see `troubleshooting.md`.
 
 #### Pending transactions and `peaqos.log`
 
@@ -159,7 +159,7 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.9 does not imply this feature is available.
 
-`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause fails with `TECHNICALLY_PAUSED` and spends nothing. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
+`peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` after both mirrors arrive. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause before the first approval fails with `TECHNICALLY_PAUSED` and spends nothing; after a confirmed approval the same code leaves that approval in place. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
 
 | Solana option | Meaning |
 | --- | --- |
@@ -218,7 +218,7 @@ peaqos machine relocation status MACHINE_ID --destination-rpc-url URL --destinat
 
 CLI 0.0.9 gives `machine status --json` a structured error object on failure. Every write accepts `--yes` and `--json`; every read accepts `--json`. Machine IDs are full-width `uint256`: pass them as canonical unsigned decimal (no `0x`, no leading zeros) and read them back as decimal strings.
 
-Every write runs the same sequence: validate locally, reconcile the journal (a pending transaction for the same action and machine blocks rather than repeats), ask the SDK for a preview (chain, contract, method, current state, intended effect), show it and ask, then submit once and record the hash before waiting for the receipt. Reruns reconcile the recorded hash and never resubmit.
+Every write runs the same sequence: validate locally, reconcile the journal (a pending transaction for the same action and machine blocks rather than repeats), ask the SDK for a preview (chain, contract, method, current state, intended effect), show it and ask, then submit once and record the hash before waiting for the receipt. A rerun reconciles an unresolved (pending) hash instead of resubmitting; once that outcome is recorded as confirmed, the next rerun is a new write and asks for consent again. Check state with `machine status`, never rerun a write with `--yes` to look.
 
 Details that matter:
 
@@ -299,7 +299,7 @@ Event submitted.
 
 ## `peaqos qualify mcr`
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, use `did:peaq:<decimal machine id>` and reads go to `https://mcr-20.peaq.xyz`. Without it, use `did:peaq:0x<address>` against `https://mcr.peaq.xyz`. Both `qualify mcr` and `show` still require `PEAQOS_PRIVATE_KEY` and the six legacy contract addresses in `.env`.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr-20.peaq.xyz`. Without a deployment ID, use `did:peaq:0x<address>` against `https://mcr.peaq.xyz`. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; the Solana release moves them to an HTTP-only query client that needs neither.
 
 ```bash
 peaqos qualify mcr did:peaq:<decimal-id>
@@ -844,7 +844,7 @@ All commands read from `.env` in the working directory (loaded automatically) or
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `PEAQOS_PRIVATE_KEY` | Writes without OWS; qualify/show reads | Signer private key (0x-prefixed hex); monetize writes also require this key |
+| `PEAQOS_PRIVATE_KEY` | Writes and qualify/show reads without OWS | Signer private key (0x-prefixed hex); monetize writes also require this key |
 | `PEAQOS_OWS_WALLET` | Yes (write commands, if not using raw key) | OWS wallet name: alternative to `PEAQOS_PRIVATE_KEY` |
 | `OWS_PASSPHRASE` | No | Vault passphrase for OWS wallets; prompted interactively if absent |
 | `PEAQOS_NETWORK` | Init defaults | `mainnet` or `testnet`; Solana onboarding guide uses `peaq` |
