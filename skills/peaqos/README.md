@@ -12,7 +12,7 @@ Invoke `/peaqos` in Claude Code and the skill will:
 
 - **Demo mode**: walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
 - **Real onboarding**: ask five questions about your machine and deployment, recommend the right architecture (self-owned or machine-owned, operator-controlled), then activate in one transaction and verify with machine status
-- **Solana onboarding**: mainnet flow with peaq reservation, subscription, then native creation once the reservation mirror and the subscription terminal status are ready. Requires `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.7.2 (`[solana,ows]` extras).
+- **Solana onboarding**: mainnet flow with peaq reservation, subscription, then native creation once the reservation mirror and the subscription terminal status are ready. Requires `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.8.0 (`[solana,ows]` extras).
 - **Fleet management**: manage lifecycle, subscriptions, ownership and DID; check MCR and submit events
 - **Scale / Machine Market**: register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery), including x402 pay-per-request services
 - **Stream / data sales**: package machine data into signed, encrypted chunks, grant or auto-deliver buyer access after payment, and pay for / decrypt purchased data (CLI 0.0.9+)

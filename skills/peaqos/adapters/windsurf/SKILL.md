@@ -14,7 +14,7 @@ description: |
   Scale, agent pairing, market orders, Stream, machine data sales or x402.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
-compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.9+; Solana requires peaq-os-cli 0.0.10+ with peaq-os-sdk 0.7.2+ and the solana/ows extras
+compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.9+; Solana requires peaq-os-cli 0.0.10+ with peaq-os-sdk 0.8.0+ and the solana/ows extras
 ---
 
 # peaqOS: Windsurf Adapter

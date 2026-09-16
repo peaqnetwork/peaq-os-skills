@@ -284,7 +284,7 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
-This path needs `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.7.2 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16). CLI 0.0.9 does not provide it.
+This path needs `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.8.0 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16). CLI 0.0.9 does not provide it.
 
 ```bash
 peaqos activate --help | grep -q -- '--chain'
