@@ -1,6 +1,6 @@
 # peaqOS Agent Skills
 
-A growing library of agent skills for [peaqOS](https://peaq.xyz) — on-chain identity and financial rails for autonomous machines. Install any skill to your agent with a single command and let it drive the full onboarding and management flow using the peaqOS CLI.
+A growing library of agent skills for [peaqOS](https://peaq.xyz): on-chain identity and financial rails for autonomous machines. Install any skill to your agent with a single command and let it drive the full onboarding and management flow using the peaqOS CLI.
 
 ---
 
@@ -18,7 +18,7 @@ Auto-detects your installed agent (Claude Code, Cursor, Windsurf) and installs t
 
 | Skill | What it does |
 |-------|-------------|
-| `peaqos` | Full machine onboarding — peaqID, Machine NFT, MCR setup, event submission, fleet management |
+| `peaqos` | Economics 2.0 activation, lifecycle, MCR, monetization, and staged Solana mainnet onboarding |
 
 More skills coming as peaqOS expands.
 
@@ -28,14 +28,15 @@ More skills coming as peaqOS expands.
 
 - Node.js ≥ 18
 - Python ≥ 3.10
-- [`peaq-os-cli`](https://github.com/peaqnetwork/peaq-os-cli-py) installed
+- [`peaq-os-cli`](https://github.com/peaqnetwork/peaq-os-cli-py) 0.0.9 or newer installed
+- Solana onboarding requires the release with `activate --chain solana` and `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"`. The skill checks the feature before proceeding.
 - For OWS encrypted key storage: `pip install "peaq-os-sdk[ows]"`
 
 ---
 
 ## Skill structure
 
-Each skill in this repo is framework-agnostic by design. `AGENT-PROMPT.md` contains all the orchestration logic in plain language — adapters for each agent are thin wrappers that wire it into that agent's skill system.
+Each skill in this repo is framework-agnostic by design. `AGENT-PROMPT.md` contains all the orchestration logic in plain language: adapters for each agent are thin wrappers that wire it into that agent's skill system.
 
 ```
 skills/
@@ -51,7 +52,7 @@ skills/
 
 ## Development
 
-To test locally after cloning, no npm install is needed — just run the install script directly with `node`:
+To test locally after cloning, no npm install is needed: just run the install script directly with `node`:
 
 ```bash
 git clone https://github.com/peaqnetwork/peaq-os-skills
