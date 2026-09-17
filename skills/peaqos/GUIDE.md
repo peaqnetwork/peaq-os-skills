@@ -284,7 +284,7 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
-This path needs `peaq-os-cli` 0.0.10 or newer with `peaq-os-sdk` 0.8.0 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16). CLI 0.0.9 does not provide it.
+This path needs `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16): `pip install -U 'peaq-os-cli[solana,ows]>=0.0.12'`. CLI 0.0.10 and older have no `--chain solana`; 0.0.11 has it, but its `solana` extra pins `peaq-os-sdk<0.8.0` and pip cannot resolve it.
 
 ```bash
 peaqos activate --help | grep -q -- '--chain'

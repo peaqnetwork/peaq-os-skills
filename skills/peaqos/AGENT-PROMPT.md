@@ -42,8 +42,8 @@ pip show open-wallet-standard >/dev/null 2>&1 || echo "OWS_NOT_INSTALLED"   # th
 
 - Python < 3.10 or missing → tell user to install Python 3.10+
 - CLI not installed → offer to run install commands (see `GUIDE.md#install`)
-- CLI older than 0.0.9 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else. A `0.0.9.devN` prerelease (the 0.0.10 release branch) counts as current, not as older.
-- CLI 0.0.9 or newer → proceed. Scale and Stream are included. If any expected command group is missing, stop and ask the user to upgrade with `pip install -U peaq-os-cli`. Use this one fallback for all groups.
+- CLI older than 0.0.10 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else: 0.0.9 and older fail every `peaq-mainnet` activation and renewal since the 2026-09-15 upgrade (`RPC_FAILED` naming `fullMode()`). For the Solana path require 0.0.12 (see `knowledge/cli-reference.md`, Solana activation).
+- CLI 0.0.10 or newer → proceed. Scale and Stream are included. If any expected command group is missing, stop and ask the user to upgrade with `pip install -U peaq-os-cli`. Use this one fallback for all groups.
 - OWS installed → store as `OWS_AVAILABLE=true`; the W2.5 wallet path will be offered in Phase 5
 - OWS not installed → store as `OWS_AVAILABLE=false`; surface once, non-blocking:
   > "OWS encrypted wallet support is available but not installed. Run `pip install "peaq-os-sdk[ows]"` to enable it, or continue without it using a standard keypair."

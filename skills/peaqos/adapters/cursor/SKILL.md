@@ -1,8 +1,8 @@
 ---
 name: peaqos
 description: |
-  Onboard machines and manage fleets with peaqOS (peaq-os-cli 0.0.9 or newer,
-  Economics 2.0), including Solana/SVM onboarding on mainnet with peaq-os-cli 0.0.10 or
+  Onboard machines and manage fleets with peaqOS (peaq-os-cli 0.0.10 or newer,
+  Economics 2.0), including Solana/SVM onboarding on mainnet with peaq-os-cli 0.0.12 or
   newer. Use it when someone asks to register a
   machine on peaq, get a peaqID or Machine NFT, manage lifecycle, subscriptions,
   DID or monetization, submit events, check an MCR score, manage a DePIN fleet,
@@ -14,7 +14,7 @@ description: |
   Scale, agent pairing, market orders, Stream, machine data sales or x402.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
-compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.9+; Solana requires peaq-os-cli 0.0.10+ with peaq-os-sdk 0.8.0+ and the solana/ows extras
+compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.10+; Solana requires peaq-os-cli 0.0.12+ with peaq-os-sdk 0.8.0+ and the solana/ows extras
 ---
 
 # peaqOS: Cursor Adapter
