@@ -157,7 +157,7 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 ### Solana activation (`--chain solana`, release of 2026-09-16)
 
-Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop the Solana path. CLI 0.0.10 (2026-09-16) ships it; 0.0.9 does not.
+Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]>=0.0.12'` and stop the Solana path. CLI 0.0.11 (2026-09-16) ships it, 0.0.10 and older do not; install 0.0.12, because 0.0.11's `solana` extra pins `peaq-os-sdk<0.8.0` and pip cannot resolve it.
 
 `peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` once the reservation mirror and the `SubscriptionTerminal` account (Active or Grace, non-zero sequence) are ready. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause before the first approval fails with `TECHNICALLY_PAUSED` and spends nothing; after a confirmed approval the same code leaves that approval in place. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
 
