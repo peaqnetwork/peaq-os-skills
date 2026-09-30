@@ -1,7 +1,7 @@
 {
   "name": "peaqos",
-  "version": "0.3.1",
-  "description": "Drive peaqOS machine activation, lifecycle, subscriptions, DID management, MCR, monetization, Scale, Stream and Solana onboarding from the peaqos CLI. Needs CLI 0.0.10 or newer (Economics 2.0; 0.0.9 is blocked on peaq mainnet since 2026-09-15). Supports peaq mainnet and agung testnet; homing a machine on Solana mainnet needs peaq-os-cli 0.0.12 or newer.",
+  "version": "0.4.0",
+  "description": "Drive peaqOS machine activation, lifecycle, subscriptions, DID management, MCR, monetization, Scale, Stream, Solana onboarding (paused) and experimental Verify reads and chip preflight from the peaqos CLI. Needs CLI 0.0.10 or newer (Economics 2.0; 0.0.9 is blocked on peaq mainnet since 2026-09-15). Supports peaq mainnet and agung testnet; homing a machine on Solana mainnet needs peaq-os-cli 0.0.12 or newer.",
   "entrypoint": "AGENT-PROMPT.md",
   "capabilities_required": [
     "shell_exec",
@@ -51,6 +51,7 @@
     "data-streams",
     "x402",
     "solana",
+    "verify",
     "economics-2-0"
   ],
   "links": {
