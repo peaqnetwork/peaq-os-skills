@@ -87,7 +87,7 @@ Routing:
 - E → Phase 9 (Scale)
 - F → Phase 10 (Stream)
 - G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding, which starts with the pause notice). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11, and is not paused.
-- H, or a request that names peaq Verify, KYB or the chip attestation → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: route it to Phase 7 or Phase 8 (`peaqos machine status`).
+- H, or a request that names peaqOS Verify, KYB or the chip attestation → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: route it to Phase 7 or Phase 8 (`peaqos machine status`).
 
 ---
 
@@ -781,7 +781,7 @@ peaqos verify --help >/dev/null 2>&1 && echo "VERIFY_OK" || echo "VERIFY_MISSING
 
 - `VERIFY_MISSING` → the installed CLI has no Verify commands. Offer to run `pip install -U peaq-os-cli` and run it only after the user agrees, then repeat the check. If `peaqos verify --help` still fails, tell the user the published CLI does not include Verify yet and stop this phase. Gate on the help check only, never on a version number, and do not install from a source branch or a test package index.
 - `VERIFY_OK` → tell the user, before anything else:
-  > "peaq Verify is experimental. This tool only reads a machine's KYB and chip status and prepares chip evidence locally; it cannot mark a machine verified, and the commands may still change."
+  > "peaqOS Verify is experimental. This tool only reads a machine's KYB and chip status and prepares chip evidence locally; it cannot mark a machine verified, and the commands may still change."
 
 Scope: there is no Verify service for agung testnet. Verify covers peaq mainnet machines only. For an agung machine, say so and do not run V1.
 
