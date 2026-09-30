@@ -63,7 +63,7 @@ than "here's the blockchain proof" (onchain) or "my tamper-proof chip signed thi
 
 ## Verify {#verify}
 
-**Technical:** Verify is peaq's attestation layer for machines, experimental in v1. It keeps two independent records per machine in the `AttestationRegistry` on the machine's home chain, read through the Verify API (`GET /v1/verify/machines/{machineId}`), the SDKs and `peaqos verify status`:
+**Technical:** Verify is peaq's attestation layer for machines, experimental in v1. It keeps two independent records per machine in the `AttestationRegistry` on peaq (mainnet Verify is EVM-only; there is no Verify service for agung testnet), read through the Verify API (`GET /v1/verify/machines/{machineId}`), the SDKs and `peaqos verify status`:
 
 | Topic | Recorded on | A `verified` record means |
 |-------|-------------|---------------------------|
@@ -76,7 +76,7 @@ v1 supports one chip: Infineon OPTIGA Trust M Express with a leaf certificate un
 
 Verify attests the machine, not individual events. It does not change the MCR score and does not set an event's trust level; `--trust hardware` stays a value you choose per event.
 
-**Plain English:** MCR says a machine earns money; Verify says the machine is real. It answers two separate questions: did peaq check the company operating it (KYB), and did its tamper-proof chip prove it is genuine hardware (chip).
+**Plain English:** Verify records two separate checks by peaq: whether the company operating the machine passed KYB, and whether the machine's Infineon chip passed peaq's chip check. Neither one makes the machine "trusted" overall.
 
 ---
 

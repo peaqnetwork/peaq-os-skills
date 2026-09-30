@@ -871,7 +871,7 @@ peaqos --verify-api-url https://mcr.peaq.xyz verify status 123
 
 One read of `GET /v1/verify/machines/{machineId}` through the SDK read client. The CLI does not retry. It needs only the origin: no wallet, key, RPC or `TOKENOMICS_DEPLOYMENT_ID`. The origin comes from the root `--verify-api-url` (which wins even when empty), then `PEAQOS_VERIFY_API_URL` from the shell or `.env`. There is no default. `MACHINE_ID` is a canonical decimal in `1..2^256-1` with no leading zeros; a DID or an address exits `1`.
 
-Human output: `Verification for machine <id>`, then `Machine DID`, `Home Chain` (`peaq (EVM)`, `Agung testnet (EVM)`, `EVM chain <id>` for an unnamed EVM chain, or `Solana`), `DID Controller`, `Operator Address` (both truncated on a terminal), `KYB`, `Chip` and `Source: Verify API`.
+Human output: `Verification for machine <id>`, then `Machine DID`, `Home Chain` (`peaq (EVM)`, `Agung testnet (EVM)`, `EVM chain <id>` for an unnamed EVM chain, or `Solana`; the CLI has labels for all four, but there is no Verify service for agung testnet, and peaq mainnet Verify returns `peaq (EVM)` machines only), `DID Controller`, `Operator Address` (both truncated on a terminal), `KYB`, `Chip` and `Source: Verify API`.
 
 `--json` prints one object with full identifiers:
 
@@ -892,7 +892,7 @@ Human output: `Verification for machine <id>`, then `Machine DID`, `Home Chain` 
 | :-- | :-- | :-- |
 | `0` | record printed | Includes both topics `unverified` |
 | `1` | `MACHINE_ID must be a canonical decimal integer in 1..2^256-1 (no leading zeros).` | Bad ID, DID or address |
-| `2` | `Machine not found in the Verify service.` | API `404 MACHINE_NOT_FOUND`: no machine with that ID in the Verify service |
+| `2` | `Machine not found in the Verify service.` | API `404 MACHINE_NOT_FOUND`: no machine with that ID in the Verify service (expected for an agung testnet machine: there is no Verify service for agung) |
 | `2` | `Verify state is temporarily unavailable; retry later.` | API `503 VERIFY_READ_UNAVAILABLE` (always for a Solana-homed machine on mainnet; can be transient for a peaq-homed one) or `INTERNAL_ERROR` |
 | `2` | `Verify API rate limit reached; retry later.` (plus `Retry after N seconds.` when the API sends 1 to 60) | API `RATE_LIMITED` |
 | `2` | `Verify status request timed out; retry later.` / `Verify API could not be reached; check your connection and retry.` / `Verify status request was canceled; retry when ready.` | Transport failure or Ctrl-C |
@@ -909,14 +909,14 @@ Three stateless stages: each re-reads its files and rebuilds the earlier stages,
 | :-- | :-- | :-- | :-- |
 | `prepare` | `--context`, `--certificate` | `chip-prehash`: 32 bytes | Chip key `0xE0F0` signs it with ECDSA without hashing; do not hash it again |
 | `controller-request` | adds `--chip-signature` | `controller-message` | The current DID controller signs it once as an EIP-191 personal message, no extra framing |
-| `finalize` | adds `--controller-signature` | `evidence`: canonical `peaq.verify.chip-evidence/1` document | Hand it to the peaq onboarding workflow that issued the challenge |
+| `finalize` | adds `--controller-signature` | `evidence`: canonical `peaq.verify.chip-evidence/1` document | Hand it to the peaq contact who issued `context.json` |
 
 | Flag | Content | Limit |
 | :-- | :-- | :-- |
 | `--context` | Challenge context JSON from peaq's onboarding service | UTF-8 without BOM, one object with exactly `chainId`, `didController`, `expiresAt`, `machineDid`, `machineId`, `nonce`, all strings; at most 4096 bytes |
 | `--certificate` | Raw DER leaf certificate read from chip object `0xE0E0` | At most 1300 bytes |
 | `--chip-signature` | Chip's native DER signature pair returned by `0xE0F0` | At most 80 bytes |
-| `--controller-signature` | Controller's EIP-191 signature, raw bytes | Exactly 65 bytes |
+| `--controller-signature` | Controller's EIP-191 signature, raw bytes | Exactly 65 bytes, low-s, last byte 27 or 28 (`0x1b`/`0x1c`); 0/1 is rejected, not normalized, and fails `finalize` with exit 1 |
 | `--out` | Artifact to create | Must not exist; created with mode `0600`, never overwritten, no `--force` |
 
 Inputs must be regular files; symlinks, directories and FIFOs are refused. The challenge is valid for at most five minutes and every stage rechecks freshness against the local clock.

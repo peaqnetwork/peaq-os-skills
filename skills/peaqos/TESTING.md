@@ -271,7 +271,8 @@ While Solana onboarding is paused, step 1 must instead show the pause notice, of
 - Gate runs `peaqos verify --help` and never checks a version number
 - Skill passes the decimal part to `peaqos verify status <id>` and offers `--json`
 - KYB and chip are reported as two separate statuses; `unverified` is explained as a normal, successful read (exit 0), with no combined "verified" verdict and no tier wording
-- The experimental note is shown; the skill does not claim the read checked the chain
+- The experimental message is shown after the gate; the skill does not claim the read checked the chain
+- A failing `peaqos whoami` (no chain configuration) does not block the read
 
 ---
 
@@ -281,10 +282,10 @@ While Solana onboarding is paused, step 1 must instead show the pause notice, of
 
 **Steps:**
 1. `/peaqos`, select **H: Verify**, then **V1**
-2. Run once more with the check skipped, so the CLI itself reports the error
 
 **Pass criteria:**
-- The prerequisite check reports the missing origin and tells the user to set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` (or `--verify-api-url` before the command name)
+- The skill does not probe `.env` for the URL; it runs `peaqos verify status` and lets the CLI validate the origin
+- On the CLI's exit 3 it tells the user to set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in `.env` or the environment (or `--verify-api-url` before the command name), and notes that an exported empty value overrides `.env`
 - The CLI error `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.` at exit 3 is diagnosed as configuration, not network
 - No other origin is invented, and no staging or dev host is used
 - V2 (chip preflight) is still offered, since it needs no origin
@@ -300,7 +301,9 @@ While Solana onboarding is paused, step 1 must instead show the pause notice, of
 
 **Pass criteria:**
 - `peaqos verify status` exits 2 with `Verify state is temporarily unavailable; retry later.`
-- The skill checks the home with `peaqos machine status <id> --json` (Solana fallback, `status: "observed"`) and explains that Verify on peaq mainnet reads peaq-homed machines only
+- The skill checks the home with `peaqos machine status <id> --json` and treats the machine as Solana-homed only when `native_current_state.status` is `present` (or the user confirms it), then explains that Verify on peaq mainnet reads peaq-homed machines only
+- `status: "observed"` with a nested `absent` or `conflict` is reported as "home unknown", not as a Solana home
+- If `machine status` cannot run (exit 3, no chain configuration), the skill asks the user which chain the machine is homed on instead of retrying
 - It does not loop on retries and does not report the machine as `unverified` or not found
 - For comparison, a single 503 on a peaq-homed machine gets exactly one retry after a short pause
 

@@ -9,11 +9,11 @@ description: |
   or connect a machine to the Machine Market. Covers Scale (market registration,
   agent pairing, service search, market orders incl. x402), Stream (signed
   encrypted data chunks, buyer access after payment, paying for and decrypting
-  data) and experimental Verify (KYB and chip status reads, chip preflight
-  evidence) on agung testnet and mainnet. Invoke on any mention of peaqOS, peaqID,
-  MCR, machine registration, DePIN onboarding, the peaqos CLI, Machine Market,
-  Scale, agent pairing, market orders, Stream, machine data sales, x402, Verify,
-  KYB or chip attestation.
+  data) on agung testnet and mainnet, and experimental Verify (KYB and chip
+  status reads, chip preflight evidence) on peaq mainnet only. Invoke on any
+  mention of peaqOS, peaqID, MCR, machine registration, DePIN onboarding, the
+  peaqos CLI, Machine Market, Scale, agent pairing, market orders, Stream,
+  machine data sales, x402, Verify, KYB or chip attestation.
 allowed-tools: Bash Read Glob Grep AskUserQuestion WebFetch
 license: Apache-2.0
 compatibility: Requires Python 3.10+ and peaq-os-cli 0.0.10+; Solana requires peaq-os-cli 0.0.12+ with peaq-os-sdk 0.8.0+ and the solana/ows extras
