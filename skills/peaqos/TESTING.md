@@ -134,7 +134,7 @@ Run through at least two distinct machine profiles and check the recommendation 
    - **D: Submit a heartbeat event**: enter machine ID from S2
 
 **Pass criteria:**
-- On agung (S2) A and B exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR) and the skill explains that instead of retrying; on `peaq-mainnet` each command executes and returns output
+- On agung (S2) A and B exit 3 with `CONFIG_ERROR` (no paired MCR) and the skill explains that instead of retrying; on `peaq-mainnet` each command executes and returns output
 - D executes and returns output
 - `--json` piping offered for scriptable output
 - Machine ID / decimal DID from S2 resolves correctly; operator DID stays address-based

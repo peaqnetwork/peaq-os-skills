@@ -130,7 +130,7 @@ Event submitted.
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `CONFIG_ERROR` (`The SDK rejected the selected MCR deployment`) there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
 
 ---
 
@@ -432,7 +432,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. With it unset, they take `did:peaq:0x<address>` and read the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. MCR reads need it set: with it unset the CLI sends `did:peaq:0x<address>` DIDs to the host in `PEAQOS_MCR_API_URL`, and those address-DID reads are no longer served. `peaq-os-sdk` 0.7.0 to 0.9.0 (CLI 0.0.13 pins 0.9.x) name `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -535,7 +535,7 @@ peaqos show operator machines did:peaq:0x<operator> --json \
 
 ## Monetization
 
-Requires `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`. Agung has no paired monetization MCR and returns exit 3, `DEPLOYMENT_UNAVAILABLE`.
+Requires `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`. Agung has no paired monetization MCR and returns exit 3, `CONFIG_ERROR`.
 
 ```bash
 peaqos monetize status <decimal-id> --json
@@ -793,7 +793,7 @@ peaqos verify chip finalize --context context.json --certificate leaf.der \
   --chip-signature chip-signature.bin --controller-signature controller-signature.bin --out evidence.json
 ```
 
-The challenge expires after at most five minutes and every stage rechecks it. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
+The challenge expires after at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
 
 ---
 
@@ -807,7 +807,7 @@ The challenge expires after at most five minutes and every stage rechecks it. Ha
 | `TOKENOMICS_DEPLOYMENT_ID` | `agung-2026-08-28` |
 | Chain ID | 9990 |
 | RPC URL | `https://peaq-agung.api.onfinality.io/public` |
-| MCR API | None paired with `agung-2026-08-28`: `qualify mcr` and `show` exit 3 with `DEPLOYMENT_UNAVAILABLE` |
+| MCR API | None paired with `agung-2026-08-28`: `qualify mcr` and `show` exit 3 with `CONFIG_ERROR` |
 | Gas Station | Not available: use web faucet |
 | Block explorer | https://agung-testnet.subscan.io |
 | Faucet | https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens |
