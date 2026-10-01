@@ -103,6 +103,12 @@ Simpler operationally than running two architectures.
 **Machine changes class over time** (dev device becomes production black-box):
 → Machine identity is permanent. The owner can set a separate DID controller without transferring the private key. Transferring the NFT retains that controller.
 
+**Wants the machine homed on Solana**:
+→ Solana onboarding is paused. A peaq contract upgrade removed the reservation call that peaqOS CLI 0.0.13 and SDK 0.9.0 use to start a Solana onboarding, so the `reservation` phase reverts until a CLI and SDK release for the new flow ships. Recommend A or B on peaq from the matrix and activate with `peaqos activate` without `--chain`.
+
+**Wants a Verify chip record (hardware attestation)**:
+→ Only an Infineon OPTIGA Trust M Express secure element (CA306 chain) on a peaq-homed machine qualifies. The chip signs on the device and the current DID controller signs the controller message, so in B the operator signs that step. The architecture choice does not change; chip preflight runs later in Phase 12 and does not change the trust level in the matrix.
+
 **Q5 = C (KMS/hardware)**:
 → Acknowledge the instinct. v1 of this skill supports hot keys on testnet and mainnet only.
 Provide the `GUIDE.md#admin-wallet-options` reference and offer a throwaway hot key for now with a rotation reminder.

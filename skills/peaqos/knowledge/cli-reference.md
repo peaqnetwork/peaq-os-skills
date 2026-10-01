@@ -20,6 +20,7 @@ pip install peaq-os-cli
 | `-q` / `--quiet` | Suppress progress output; only print errors |
 | `--help` | Help for any command |
 | `--orchestration-url`, `--orch-api-key` | Override Scale environment settings |
+| `--verify-api-url` | HTTPS origin of the Verify API; overrides `PEAQOS_VERIFY_API_URL` (only on a CLI with `peaqos verify`) |
 
 ---
 
@@ -34,7 +35,15 @@ peaqos init --non-interactive  # read all values from env vars
 ```
 
 
-  **`EVENT_REGISTRY_ADDRESS` is the one legacy address the wizard does not fill in (still the case in 0.0.9, checked 2026-09-14; fixed in CLI 0.0.10, where the prompt defaults to the network's Event Registry and `--non-interactive` takes the network default when the shell variable is unset).** On mainnet the other five come from the network defaults (fetched from GitHub at init time; empty when offline); on agung only `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` have defaults, so `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` also stay empty and must be filled by hand from `examples/.env.example`; on 0.0.9 the Event Registry prompt had no default and `--non-interactive` wrote whatever `EVENT_REGISTRY_ADDRESS` held in the shell, empty if unset. With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts).
+  **The `EVENT_REGISTRY_ADDRESS` default depends on the CLI version.** An `EVENT_REGISTRY_ADDRESS` exported in the shell always takes precedence over the default, interactive or `--non-interactive`.
+
+  | CLI | peaq mainnet | agung |
+  | :-- | :-- | :-- |
+  | 0.0.13 or newer | Tokenomics 2.0 EventRegistry `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`, written with a `.env` comment naming it (also offline). Nothing to set by hand. | No default |
+  | 0.0.10 to 0.0.12 | Network default from GitHub, which is the 1.0 registry `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA` (empty when offline). Replace it with the 2.0 address for a 2.0 machine. | No default |
+  | 0.0.9 | No default | No default |
+
+  On mainnet the other five legacy addresses come from the network defaults fetched from GitHub at init time (offline, `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` keep their precompile defaults `0x0000000000000000000000000000000000000800` and `0x0000000000000000000000000000000000000805`, the other three stay empty); on agung only `DID_REGISTRY_ADDRESS` and `BATCH_PRECOMPILE_ADDRESS` have defaults, so `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` also stay empty and must be filled by hand from `examples/.env.example` (agung EventRegistry: `0x2DAD8905380993940e340C5cE6d313d5c2780040`). With an empty value every command that builds an SDK client exits `3` with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Export it before running the wizard or fill the line in `.env` afterwards; the addresses are in the [install page tables](https://docs.peaq.xyz/peaqos/install#peaq-mainnet-contracts). CLI 0.0.14 prefills the mainnet MCR API URL with `https://mcr.peaq.xyz`; CLI 0.0.13 prefilled `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API, and 0.0.9 to 0.0.12 prefilled `https://mcr.peaq.xyz`. Deployment-mode reads ignore this value and resolve the host from the installed SDK's deployment record.
 
 
 ## `peaqos whoami`
@@ -157,6 +166,8 @@ A submitted transaction whose receipt does not arrive is reported as `PENDING` a
 
 ### Solana activation (`--chain solana`, release of 2026-09-16)
 
+**Paused.** The CORE-801 contract upgrade (peaq mainnet, 2026-09-30) removed the reservation call that CLI 0.0.13 and SDK 0.9.0 use, so the `reservation` phase reverts and new Solana onboardings fail until a CLI and SDK release for the new flow ships. Activate new machines on peaq. Managing machines already homed on Solana and `stream pay --chain solana` are not affected. The reference below describes the CLI 0.0.13 flow.
+
 Gate with `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]>=0.0.12'` and stop the Solana path. CLI 0.0.11 (2026-09-16) ships it, 0.0.10 and older do not; install 0.0.12, because 0.0.11's `solana` extra pins `peaq-os-sdk<0.8.0` and pip cannot resolve it.
 
 `peaqos activate --chain solana` uses three write phases, one invocation each: `reservation`, `subscription`, then `native_onboarding` once the reservation mirror and the `SubscriptionTerminal` account (Active or Grace, non-zero sequence) are ready. The `subscription` phase requires `isEconomicAuthority()` on peaq and reads both technical pause flags before it approves or activates; a pause before the first approval fails with `TECHNICALLY_PAUSED` and spends nothing; after a confirmed approval the same code leaves that approval in place. Mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set peaq `PEAQOS_RPC_URL` and separate Solana `PEAQOS_SVM_RPC_URL`.
@@ -239,7 +250,7 @@ peaqos machine transfer <machine-id> 0xRecipient --yes
 Exit codes and `error_code` values are the ones documented under [`peaqos activate`](#peaqos-activate): one taxonomy for both.
 
 
-  **`qualify mcr`, `show machine` and `show operator machines` follow the deployment mode since CLI 0.0.9 (2026-09-14).** With `TOKENOMICS_DEPLOYMENT_ID` set, a machine DID is `did:peaq:<decimal machine id>` and the reads go to `mcr-20.peaq.xyz`; a `did:peaq:0x<address>` DID exits `1` with a message naming the mode. Without it, address DIDs only, against `mcr.peaq.xyz`. `show operator machines` takes `did:peaq:0x<address>` in both modes, because an operator DID names an account, not a machine. On CLI 0.0.9 both commands build the full SDK client even for a read (signer source plus the six Tokenomics 1.0 addresses in `.env`); CLI 0.0.10 reads MCR over HTTP only and needs neither. A failed query exits `2` with the MCR error code (for example `SERVICE_UNAVAILABLE` while the 2.0 operator index is syncing) instead of a traceback. Verified 2026-09-14 against `mcr-20.peaq.xyz`. On CLI 0.0.8 the same commands reject every 2.0 DID; upgrade with `pip install -U peaq-os-cli`.
+  **`qualify mcr`, `show machine` and `show operator machines` follow the deployment mode since CLI 0.0.9 (2026-09-14).** With `TOKENOMICS_DEPLOYMENT_ID` set, a machine DID is `did:peaq:<decimal machine id>` and the reads go to `mcr.peaq.xyz` (the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0); a `did:peaq:0x<address>` DID exits `1` with a message naming the mode. Without it, address DIDs only, against the host in `PEAQOS_MCR_API_URL`. `show operator machines` takes `did:peaq:0x<address>` in both modes, because an operator DID names an account, not a machine. On CLI 0.0.9 both commands build the full SDK client even for a read (signer source plus the six Tokenomics 1.0 addresses in `.env`); CLI 0.0.10 reads MCR over HTTP only and needs neither. A failed query exits `2` with the MCR error code (for example `SERVICE_UNAVAILABLE` while the 2.0 operator index is syncing) instead of a traceback. On CLI 0.0.8 the same commands reject every 2.0 DID; upgrade with `pip install -U peaq-os-cli`.
 
 ## `peaqos qualify event`
 
@@ -299,7 +310,7 @@ Event submitted.
 
 ## `peaqos qualify mcr`
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr-20.peaq.xyz`. Without a deployment ID, use `did:peaq:0x<address>` against `https://mcr.peaq.xyz`. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; CLI 0.0.10 moves them to an HTTP-only query client that needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr.peaq.xyz`. Without a deployment ID, use `did:peaq:0x<address>` against the host in `PEAQOS_MCR_API_URL`. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; CLI 0.0.10 moves them to an HTTP-only query client that needs neither.
 
 ```bash
 peaqos qualify mcr did:peaq:<decimal-id>
@@ -799,7 +810,7 @@ peaqos scale order dispute <order-id> \
 Manage a machine's **Economics 2.0 monetization** decision in the MCR: `status` is a public read; `opt-in` and `opt-out` are signed, off-chain decisions. Thin wrappers over the SDK's [opt-in client](https://docs.peaq.xyz/peaqos/sdk-reference/monetization-opt-in): the SDK runs the compatibility check, EIP-191 signing, retries, HTTP, and response validation; the CLI adds parsing, prompts, and output.
 
 
-  **Live on `peaq-mainnet` since 2026-09-05.** The 2.0 MCR at `https://mcr-20.peaq.xyz` publishes the `/.well-known/peaq-monetization` signal and serves the mirrored 2.0 machines; `peaqos monetize status <decimal id>` returns `PENDING` for a machine that has never opted in (checked 2026-09-05 14:00 UTC, reads only). `agung-2026-08-28` has no paired MCR and exits `3` with `DEPLOYMENT_UNAVAILABLE`.
+  **Live on `peaq-mainnet` since 2026-09-05.** The 2.0 MCR at `https://mcr.peaq.xyz` publishes the `/.well-known/peaq-monetization` signal and serves the mirrored 2.0 machines; `peaqos monetize status <decimal id>` returns `PENDING` for a machine that has never opted in. `agung-2026-08-28` has no paired MCR and exits `3` with `DEPLOYMENT_UNAVAILABLE`.
 
 
 ```text
@@ -834,7 +845,92 @@ CLI 0.0.9 gives `monetize status --json` a structured error object on failure. 2
 
 ### `peaqos monetize provision`
 
-For an opted-in machine, use `peaqos monetize provision run <provider> --machine <decimal-id>`; `preflight` and `verify` inspect setup and results. Supply `PEAQOS_MANIFEST_REPO_URL` (or `--manifest-repo`) from the peaq team and `PEAQOS_MACHINE_WALLET_ADDRESS` for the payout context. Clear the wallet address before changing machines. Manual mode confirms each command. Read `peaqos monetize provision --help` before provisioning.
+For an opted-in machine, use `peaqos monetize provision run <provider> --machine <decimal-id>`; `preflight` and `verify` inspect setup and results. Supply `PEAQOS_MANIFEST_REPO_URL` (or `--manifest-repo`) from the peaq team and `PEAQOS_MACHINE_WALLET_ADDRESS` for the payout context. Clear the wallet address before changing machines. Manual mode confirms each command. Read `peaqos monetize provision --help` before provisioning. (`monetize provision verify` is unrelated to `peaqos verify` below.)
+
+---
+
+## `peaqos verify`
+
+Experimental. Verify needs peaq-os-cli 0.0.14 or newer; 0.0.14 is the first published CLI with these commands and depends on peaq-os-sdk >=0.10.0,<0.11. Reads a machine's Verify record and builds local chip preflight artifacts. Nothing here writes a Verify record. Gate with `peaqos verify --help`: if it fails, the installed CLI has no Verify commands. Do not gate on a version number.
+
+```text
+peaqos verify status MACHINE_ID [--json]
+peaqos verify chip prepare --context FILE --certificate FILE --out FILE [--json]
+peaqos verify chip controller-request --context FILE --certificate FILE --chip-signature FILE --out FILE [--json]
+peaqos verify chip finalize --context FILE --certificate FILE --chip-signature FILE --controller-signature FILE --out FILE [--json]
+```
+
+### `peaqos verify status`
+
+```bash
+export PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz
+peaqos verify status 123
+peaqos verify status 123 --json
+peaqos --verify-api-url https://mcr.peaq.xyz verify status 123
+```
+
+One read of `GET /v1/verify/machines/{machineId}` through the SDK read client. The CLI does not retry. It needs only the origin: no wallet, key, RPC or `TOKENOMICS_DEPLOYMENT_ID`. The origin comes from the root `--verify-api-url` (which wins even when empty), then `PEAQOS_VERIFY_API_URL` from the shell or `.env`. There is no default. `MACHINE_ID` is a canonical decimal in `1..2^256-1` with no leading zeros; a DID or an address exits `1`.
+
+Human output: `Verification for machine <id>`, then `Machine DID`, `Home Chain` (`peaq (EVM)`, `Agung testnet (EVM)`, `EVM chain <id>` for an unnamed EVM chain, or `Solana`; the CLI has labels for all four, but there is no Verify service for agung testnet, and peaq mainnet Verify returns `peaq (EVM)` machines only), `DID Controller`, `Operator Address` (both truncated on a terminal), `KYB`, `Chip` and `Source: Verify API`.
+
+`--json` prints one object with full identifiers:
+
+```json
+{
+  "machineId": "123",
+  "machineDid": "did:peaq:123",
+  "homeChain": { "kind": "evm", "chainId": "3338" },
+  "didController": { "kind": "evm", "address": "0x..." },
+  "operator": { "kind": "evm", "address": "0x..." },
+  "verification": { "kyb": { "status": "unverified" }, "chip": { "status": "unverified" } }
+}
+```
+
+`homeChain` is `{ "kind": "solana", "genesisHash": "..." }` for a Solana home in the schema, but peaq mainnet Verify does not serve Solana-homed reads (see exit `2`). Each status is `unverified`, `verified`, `expired` or `revoked`, per topic, with no aggregate field.
+
+| Exit | Message | When |
+| :-- | :-- | :-- |
+| `0` | record printed | Includes both topics `unverified` |
+| `1` | `MACHINE_ID must be a canonical decimal integer in 1..2^256-1 (no leading zeros).` | Bad ID, DID or address |
+| `2` | `Machine not found in the Verify service.` | API `404 MACHINE_NOT_FOUND`: no machine with that ID in the Verify service (expected for an agung testnet machine: there is no Verify service for agung) |
+| `2` | `Verify state is temporarily unavailable; retry later.` | API `503 VERIFY_READ_UNAVAILABLE` (always for a Solana-homed machine on mainnet; can be transient for a peaq-homed one) or `INTERNAL_ERROR` |
+| `2` | `Verify API rate limit reached; retry later.` (plus `Retry after N seconds.` when the API sends 1 to 60) | API `RATE_LIMITED` |
+| `2` | `Verify status request timed out; retry later.` / `Verify API could not be reached; check your connection and retry.` / `Verify status request was canceled; retry when ready.` | Transport failure or Ctrl-C |
+| `2` | `Verify API returned an invalid response; do not treat it as verification state.` | Response failed the SDK's shape checks |
+| `2` | `Verify status could not be read.` | Any other API error, for example `VERIFY_ROUTE_NOT_FOUND` from an origin without the Verify route |
+| `3` | `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.` | Origin missing, empty or not a valid HTTPS origin |
+| `3` | `Install a peaq-os-sdk package with public Verify read support.` | Installed SDK lacks `peaq_os_sdk.verify` |
+
+### `peaqos verify chip`
+
+Three stateless stages: each re-reads its files and rebuilds the earlier stages, so nothing is cached or resumed. They never contact the chip, a wallet or the Verify API and hold no key. External signers produce the two signatures. Chip preflight is EVM-only and supports one profile: Infineon OPTIGA Trust M Express, leaf certificate under the CA306 chain.
+
+| Stage | Reads | Writes (`--out`) | Then |
+| :-- | :-- | :-- | :-- |
+| `prepare` | `--context`, `--certificate` | `chip-prehash`: 32 bytes | Chip key `0xE0F0` signs it with ECDSA without hashing; do not hash it again |
+| `controller-request` | adds `--chip-signature` | `controller-message` | The current DID controller signs it once as an EIP-191 personal message, no extra framing |
+| `finalize` | adds `--controller-signature` | `evidence`: canonical `peaq.verify.chip-evidence/1` document | Hand it to the peaq contact who issued `context.json` |
+
+| Flag | Content | Limit |
+| :-- | :-- | :-- |
+| `--context` | Challenge context JSON from peaq's onboarding service | UTF-8 without BOM, one object with exactly `chainId`, `didController`, `expiresAt`, `machineDid`, `machineId`, `nonce`, all strings; at most 4096 bytes |
+| `--certificate` | Raw DER leaf certificate read from chip object `0xE0E0` | At most 1300 bytes |
+| `--chip-signature` | Chip's native DER signature pair returned by `0xE0F0` | At most 80 bytes |
+| `--controller-signature` | Controller's EIP-191 signature, raw bytes | Exactly 65 bytes, low-s, last byte 27 or 28 (`0x1b`/`0x1c`); 0/1 is rejected, not normalized, and fails `finalize` with exit 1 |
+| `--out` | Artifact to create | Must not exist; created with mode `0600`, never overwritten, no `--force` |
+
+Inputs must be regular files; symlinks, directories and FIFOs are refused. The challenge is valid for at most five minutes and every stage rechecks freshness against the local clock.
+
+Human output: `Chip preflight artifact created.`, then `Stage`, `Artifact` (`chip-prehash`, `controller-message` or `evidence`), `Byte Length` and `Authority: local preflight only`. `finalize` adds `Protocol: peaq.verify.chip-proof/1`, `Profile: infineon-optiga-trust-m-express-ca306/1`, `Evidence Schema: peaq.verify.chip-evidence/1`, `Trust Bundle: infineon-optiga-trust-m-express-ca306-roots/1` and `Revocation Status: not_evaluated` (revocation was not checked locally; not a claim that the certificate is unrevoked). `--json` prints one object with `artifact`, `authority` (`local_preflight_only`), `byteLength` and `stage`, plus `evidenceSchema`, `profile`, `protocol`, `revocationStatus` and `trustBundle` on `finalize`. No artifact bytes, path, DID, address, evidence hash or chip ref is printed.
+
+A successful `finalize` is local preflight, not a submission and not a verified machine. peaq's backend revalidates the evidence and consumes the challenge; read the result with `peaqos verify status`. The chip challenge and evidence API routes take peaq's onboarding service token and are not for operators to call.
+
+| Exit | When |
+| :-- | :-- |
+| `0` | Artifact written |
+| `1` | Invalid input file, rejected certificate or signature, expired challenge, or `--out` cannot be created (`Chip <stage> failed because <reason>.`, see troubleshooting) |
+| `2` | `Chip <stage> could not be completed.` (unexpected failure) or `Chip <stage> was canceled; retry when ready.` |
+| `3` | `Install a peaq-os-sdk package with public Verify read support.` (SDK without the preflight functions) |
 
 ---
 
@@ -850,7 +946,8 @@ All commands read from `.env` in the working directory (loaded automatically) or
 | `PEAQOS_NETWORK` | Init defaults | `mainnet` or `testnet`; Solana onboarding guide uses `peaq` |
 | `PEAQOS_RPC_URL` | Yes for chain commands | peaq RPC endpoint |
 | `PEAQOS_GAS_STATION_URL` | No | Gas station URL (not needed with `--skip-funding`) |
-| `PEAQOS_MCR_API_URL` | Legacy reads | 1.0 MCR URL; 2.0 reads resolve from the deployment |
+| `PEAQOS_MCR_API_URL` | Reads without a deployment ID | MCR host for `qualify mcr` and `show` when `TOKENOMICS_DEPLOYMENT_ID` is unset; 2.0 reads resolve from the deployment (`mcr.peaq.xyz` on `peaq-mainnet`) |
+| `PEAQOS_VERIFY_API_URL` | `peaqos verify status` | HTTPS origin of the Verify API, `https://mcr.peaq.xyz`; no default. Root `--verify-api-url` overrides it |
 | `TOKENOMICS_DEPLOYMENT_ID` | activate, machine, monetize | `peaq-mainnet` or `agung-2026-08-28` |
 | `PEAQOS_SVM_NETWORK` | Solana | `mainnet-beta` for onboarding |
 | `PEAQOS_SVM_RPC_URL` | Solana | Separate Solana RPC endpoint |

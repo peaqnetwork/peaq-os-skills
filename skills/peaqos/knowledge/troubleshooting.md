@@ -21,8 +21,12 @@ Generate fresh: `peaqos init` → choose "generate".
 **Fix:** Check `PEAQOS_NETWORK` matches your intent. Re-run `peaqos init` to regenerate.
 
 **Symptom:** `Missing required env var: EVENT_REGISTRY_ADDRESS`, exit 3 after init.
-**Cause:** The CLI 0.0.9 wizard had no default for this variable and left it empty (0.0.10 defaults it to the network value). Every command building an SDK client then fails.
+**Cause:** The wizard left the variable empty: CLI 0.0.9 has no default on any network, and no version has an agung default (a mainnet init on 0.0.10 to 0.0.12 run offline also leaves it empty). Every command building an SDK client then fails.
 **Fix:** Fill it and verify all six addresses using `GUIDE.md#network-reference`. Mainnet 2.0: `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`; mainnet 1.0: `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`; agung: `0x2DAD8905380993940e340C5cE6d313d5c2780040`. Confirm `TOKENOMICS_DEPLOYMENT_ID` in `whoami`'s `Tokenomics 2.0:` block.
+
+**Symptom:** A 2.0 machine's events land in the 1.0 EventRegistry after a mainnet `peaqos init`.
+**Cause:** CLI 0.0.10 to 0.0.12 prefill the mainnet network default, which is the 1.0 registry `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`. CLI 0.0.13 or newer writes the 2.0 registry `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e` instead, unless `EVENT_REGISTRY_ADDRESS` is already in the environment. The CLI loads an existing `.env` into the environment before init runs, so a stale 1.0 value in `.env` survives an upgrade and rerun, the same as a shell export.
+**Fix:** Edit `.env` to `EVENT_REGISTRY_ADDRESS=0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e`. Or remove the line from `.env`, unset any shell export, and rerun init on CLI 0.0.13 or newer (`pip install -U peaq-os-cli`).
 
 **Symptom:** `peaqos whoami` shows `Chain ID: 3338` but you expect testnet
 **Cause:** `PEAQOS_RPC_URL` points at a mainnet endpoint; `PEAQOS_NETWORK` is only a label, the chain ID comes from the RPC.
@@ -125,7 +129,7 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 
 | Symptom | Exit | Action |
 |---------|------|--------|
-| DID rejected for deployment mode | 1 | With `TOKENOMICS_DEPLOYMENT_ID`, use `did:peaq:<decimal machine id>` at `mcr-20.peaq.xyz`. Without it, use `did:peaq:0x<address>` at `mcr.peaq.xyz`. `show operator machines` always takes an address DID. |
+| DID rejected for deployment mode | 1 | With `TOKENOMICS_DEPLOYMENT_ID`, use `did:peaq:<decimal machine id>` (reads go to `mcr.peaq.xyz`; CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API). Without it, use `did:peaq:0x<address>` against the host in `PEAQOS_MCR_API_URL`. `show operator machines` always takes an address DID. |
 | Missing private key or legacy address | 3 | On CLI 0.0.9 `qualify mcr` and `show` build the full SDK client: supply `PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET` plus all six legacy addresses in `.env`. The Solana release reads MCR over HTTP only and never raises this for these commands. |
 | `SERVICE_UNAVAILABLE` | 2 | MCR or its operator index is unavailable or syncing. Retry later. `show machine` also reads MCR; use `machine status <decimal-id> --json` for independent chain state. |
 | Machine not found | 2 | Confirm ID and deployment, then inspect chain state. An indexer delay is possible but is not proof of a successful activation. |
@@ -138,8 +142,11 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 
 ## Phase: Solana onboarding
 
+**Solana onboarding is paused, and this applies to every row in this table, including attempts already in progress.** Until a CLI and SDK release for the new flow ships and peaq announces Solana onboarding is open again, do not reconcile, resume a subscription, or rerun `native_onboarding` or any other `peaqos activate --chain solana` phase. Keep the working directory, the original arguments and `peaqos.log`, and send the user to the peaq contact running their onboarding. Read-only status (`peaqos machine status <id> --json`) is still fine. The rows below apply again once onboarding reopens.
+
 | Observation | Action |
 |-------------|--------|
+| `--phase reservation` reverts on CLI 0.0.13 / SDK 0.9.0 | Solana onboarding is paused: the CORE-801 upgrade on peaq mainnet (2026-09-30) removed the reservation call these releases use. Stop, do not retry or work around it, and activate new machines on peaq until a CLI and SDK release for the new flow ships. For an onboarding already in progress, see the pause note above this table. |
 | `activate --help` lacks `--chain` | Stop this path. Tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'`. Extras alone do not add missing SDK APIs. |
 | Wrong chain or missing configuration | Mainnet only: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Set separate peaq and Solana RPC URLs. `whoami` cluster output is unverified metadata. |
 | Rejected tier or EVM mode flags | Use basic/pro; omit `--for`, `--machine-key` and `--slippage-bps`. Supply base58 native owner/manufacturer and all explicit caps/history/compute settings. |
@@ -155,6 +162,42 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 | Status says observed/present | `machine status <id> --json` is a wallet-free, journal-free current observation. Inspect `native_current_state`; present alone proves neither a creation receipt nor completed linkage. |
 
 Input errors exit 1. Pending/conflicting states successfully observed by `machine status` can exit 0. Keep historical receipts separate from current peaq/Solana observations.
+
+---
+
+## Phase: Verify
+
+Verify is experimental. Read the exact message and exit code; the CLI prints fixed messages and never the API's own text.
+
+**Symptom:** `peaqos verify --help` fails / `No such command 'verify'`
+**Cause:** The installed CLI has no Verify commands.
+**Fix:** Verify needs peaq-os-cli 0.0.14 or newer. Offer `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then check `peaqos verify --help` again. If it still fails, stop: the installed CLI still has no Verify commands. Do not install from a source branch or a test index.
+
+| Message | Exit | Action |
+|---------|------|--------|
+| `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.` | 3 | Set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in `.env` or the shell, or pass `--verify-api-url https://mcr.peaq.xyz` before the command name. An empty `--verify-api-url` wins over the variable and fails the same way. `http://` is rejected. |
+| `Install a peaq-os-sdk package with public Verify read support.` | 3 | The SDK under the CLI lacks `peaq_os_sdk.verify`. After the user agrees, run `pip install -U 'peaq-os-cli>=0.0.14'` to install the compatible SDK dependency, then check `peaqos verify --help` again. |
+| `MACHINE_ID must be a canonical decimal integer in 1..2^256-1 (no leading zeros).` | 1 | Pass the decimal machine ID, not a DID, address, hex or zero-padded value. |
+| `Machine not found in the Verify service.` | 2 | API `404 MACHINE_NOT_FOUND`. It only means the Verify service has no machine with that ID. There is no Verify service for agung testnet: for an agung machine this answer is expected, not a wrong ID. Otherwise check the ID with `peaqos machine status <decimal-id> --json`; do not report it as `unverified`. |
+| `Verify state is temporarily unavailable; retry later.` | 2 | API `503 VERIFY_READ_UNAVAILABLE` or `INTERNAL_ERROR`. For a Solana-homed machine this is permanent on mainnet: Verify reads are EVM-only, do not retry. Count a machine as Solana-homed when `machine status --json` fails with `error_code` `MACHINE_HOMED_ELSEWHERE` and a message naming solana (the normal result with a peaq-only configuration, exit 2), when `native_current_state.status` is `present`, or when the user confirms it; `status: "observed"` alone does not prove it. If `machine status` cannot run, ask the user for the home chain. For a peaq-homed machine it can be transient; the CLI does not retry, so run the command once more after a short pause. |
+| `Verify API rate limit reached; retry later.` | 2 | Wait. When the API sends a delay of 1 to 60 seconds the message adds `Retry after N seconds.` |
+| `Verify status could not be read.` | 2 | Any other API error, for example `VERIFY_ROUTE_NOT_FOUND` when the origin has no Verify route. Check the origin is `https://mcr.peaq.xyz`. |
+| `Verify API returned an invalid response; do not treat it as verification state.` | 2 | The response failed the SDK's checks. Report nothing about the machine's state from it. |
+| `Verify status request timed out; retry later.` / `Verify API could not be reached; check your connection and retry.` | 2 | Network problem; check connectivity and the origin. |
+
+**Chip preflight (`peaqos verify chip`).** Rejections exit 1 and read `Chip <stage> failed because <reason>.`:
+
+| Reason in the message | Action |
+|-----------------------|--------|
+| `the challenge is outside its freshness window. Request a new challenge and retry.` | The five-minute window passed or the local clock is off. Get a new `context.json` from peaq's onboarding service, check the clock, and start again from `prepare` (new prehash, new signatures). |
+| `the supplied certificate is not a valid chip leaf` / `does not chain to a trusted chip root` / `is not a supported chip profile` | Only an Infineon OPTIGA Trust M Express leaf under the CA306 chain works. Re-read the raw DER from object `0xE0E0`; another chip cannot be used. |
+| `the supplied chip signature is not well formed` | Pass the chip's native DER signature pair from `0xE0F0` as raw bytes, at most 80. |
+| `the supplied chip signature does not match this attempt` | The chip signed something other than this `prehash.bin`, or the prehash was hashed again. Sign the exact file with ECDSA without hashing. |
+| `the supplied controller signature does not match this attempt` | Check the last byte first: `xxd -s 64 -p controller-signature.bin` must print `1b` or `1c`. A signature ending in `00` or `01` (the 0/1 recovery convention) is rejected, not normalized: change that byte to `1b` or `1c` and rerun `finalize`. A high-s signature is rejected too; sign again with a standard EIP-191 signer. Otherwise: wrong signer, or extra prefix/hashing. The DID controller named in `context.json` signs `controller-message.bin` once as an EIP-191 personal message. If the controller changed since the challenge was issued, request a new challenge. |
+| `the supplied certificate or signature could not be verified` / `the supplied preflight material is not valid` | Check that every file belongs to this attempt: the same `context.json`, the leaf from this chip, and signatures made over this run's `prehash.bin` and `controller-message.bin`. |
+| `the evidence document does not match its schema` / `exceeds its size limit` / `a derived evidence value was zero` / `could not be canonicalized` / `the canonical evidence could not be produced` | Rerun `finalize` with the same files; if it repeats, report it to peaq with the stage name. |
+
+File checks also exit 1 and name only the flag: `--context must be a readable regular file of at most 4096 bytes.` (same form for `--certificate` 1300, `--chip-signature` 80, `--controller-signature` exactly 65), `--context must be UTF-8 JSON without a byte-order mark.`, `--context must be one JSON object holding exactly chainId, didController, expiresAt, machineDid, machineId and nonce as strings.`, `--context must name a machine whose DID, identifier, chain and controller the SDK accepts together.` (the context does not describe one consistent EVM machine), and `--out must be a path that does not exist yet and can be created as a new file.` (pick a new path; there is no overwrite). A controller signature saved as hex fails the 65-byte check: convert it to raw bytes first. `Chip <stage> could not be completed.` is exit 2: rerun once, then report it.
 
 ---
 

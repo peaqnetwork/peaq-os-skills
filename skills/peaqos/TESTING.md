@@ -255,6 +255,58 @@ Use a matching CLI/SDK release with staged Solana APIs. This scenario can spend 
 
 Pass: no testnet walkthrough, no changed caps or payment rail on resume, no journal deletion or replacement transaction after timeout/conflict. Missing dependency/config is exit 3, read failure exit 2. Pending/conflicting status can exit 0.
 
+While Solana onboarding is paused, step 1 must instead show the pause notice, offer activation on peaq, and run no `--chain solana` phase.
+
+---
+
+### S10: Verify: read a peaq-homed machine's status
+
+**Prerequisite:** a CLI where `peaqos verify --help` succeeds, `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in `.env`, and the decimal ID of a machine homed on peaq mainnet.
+
+**Steps:**
+1. `/peaqos`, select **H: Verify**, then **V1**
+2. Give the machine as `did:peaq:<decimal id>`
+
+**Pass criteria:**
+- Gate runs `peaqos verify --help` and never checks a version number
+- Skill passes the decimal part to `peaqos verify status <id>` and offers `--json`
+- KYB and chip are reported as two separate statuses; `unverified` is explained as a normal, successful read (exit 0), with no combined "verified" verdict and no tier wording
+- The experimental message is shown after the gate; the skill does not claim the read checked the chain
+- A failing `peaqos whoami` (no chain configuration) does not block the read
+
+---
+
+### S11: Verify: missing API origin
+
+**Setup:** remove `PEAQOS_VERIFY_API_URL` from `.env` and the shell.
+
+**Steps:**
+1. `/peaqos`, select **H: Verify**, then **V1**
+
+**Pass criteria:**
+- The skill does not probe `.env` for the URL; it runs `peaqos verify status` and lets the CLI validate the origin
+- On the CLI's exit 3 it tells the user to set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in `.env` or the environment (or `--verify-api-url` before the command name), and notes that an exported empty value overrides `.env`
+- The CLI error `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.` at exit 3 is diagnosed as configuration, not network
+- No other origin is invented, and no staging or dev host is used
+- V2 (chip preflight) is still offered, since it needs no origin
+
+---
+
+### S12: Verify: Solana-homed machine
+
+**Prerequisite:** the decimal ID of a machine homed on Solana, and `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz`.
+
+**Steps:**
+1. `/peaqos`, select **H: Verify**, then **V1**, and give the Solana-homed machine ID
+
+**Pass criteria:**
+- `peaqos verify status` exits 2 with `Verify state is temporarily unavailable; retry later.`
+- The skill checks the home with `peaqos machine status <id> --json` and treats the machine as Solana-homed only when `native_current_state.status` is `present` (or the user confirms it), then explains that Verify on peaq mainnet reads peaq-homed machines only
+- `status: "observed"` with a nested `absent` or `conflict` is reported as "home unknown", not as a Solana home
+- If `machine status` cannot run (exit 3, no chain configuration), the skill asks the user which chain the machine is homed on instead of retrying
+- It does not loop on retries and does not report the machine as `unverified` or not found
+- For comparison, a single 503 on a peaq-homed machine gets exactly one retry after a short pause
+
 ---
 
 ## Known limitations (not bugs)
@@ -265,6 +317,7 @@ Pass: no testnet walkthrough, no changed caps or payment rail on resume, no jour
 | MCR indexer lag | Service indexing is separate from chain state. Use machine status for chain confirmation |
 | Faucet rate limit | 3 AGNG/day per address. If a tester hits this, generate a fresh keypair via `peaqos init` |
 | KMS/hardware wallet | v1 hot keys only. Skill acknowledges this in Phase 5 (W3 branch) and offers a throwaway key |
+| Verify is experimental | Reads and local chip preflight only; chip intake runs through peaq's onboarding service, so S10 to S12 cannot produce a `verified` chip on their own |
 
 ---
 

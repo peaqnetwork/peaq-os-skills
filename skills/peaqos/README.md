@@ -12,9 +12,10 @@ Invoke `/peaqos` in Claude Code and the skill will:
 
 - **Demo mode**: walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
 - **Real onboarding**: ask five questions about your machine and deployment, recommend the right architecture (self-owned or machine-owned, operator-controlled), then activate in one transaction and verify with machine status
-- **Solana onboarding**: mainnet flow with peaq reservation, subscription, then native creation once the reservation mirror and the subscription terminal status are ready. Requires `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 (`[solana,ows]` extras); 0.0.10 has no `--chain solana` and 0.0.11's `solana` extra does not install.
+- **Solana onboarding** (paused: a peaq contract upgrade removed the reservation call that CLI 0.0.13 and SDK 0.9.0 use, so the `reservation` phase reverts until a CLI and SDK release for the new flow ships; the skill stops before onboarding and offers activation on peaq instead): mainnet flow with peaq reservation, subscription, then native creation once the reservation mirror and the subscription terminal status are ready. Requires `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 (`[solana,ows]` extras); 0.0.10 has no `--chain solana` and 0.0.11's `solana` extra does not install.
 - **Fleet management**: manage lifecycle, subscriptions, ownership and DID; check MCR and submit events
 - **Scale / Machine Market**: register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery), including x402 pay-per-request services
+- **Verify** (experimental): read a machine's KYB and chip status with `peaqos verify status`, and build local chip preflight evidence for peaq's onboarding service with `peaqos verify chip` (Infineon OPTIGA Trust M Express, peaq-homed machines). Needs a CLI where `peaqos verify --help` works and `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz`
 - **Stream / data sales**: package machine data into signed, encrypted chunks, grant or auto-deliver buyer access after payment, and pay for / decrypt purchased data (CLI 0.0.9+)
 - **Troubleshooting**: diagnose common failures (funding, activation errors, MCR lag, key mismatches, Scale auth, Stream key/decryption errors) and walk you through the fix
 
@@ -71,7 +72,7 @@ Load `AGENT-PROMPT.md` as the agent's system prompt or instructions. Make the `k
 
 ## Quick command reference
 
-These are the underlying commands. In activation rows, `...` means the required flags: `--machine-type`, `--credential-subject-hex`, `--manufacturer`, `--tier` and `--did-document`. See `GUIDE.md#activation` for a complete example. For activation, `machine` and `monetize`, set `TOKENOMICS_DEPLOYMENT_ID` and verify the six legacy addresses after init (the wizard leaves `EVENT_REGISTRY_ADDRESS` empty unless supplied). For the `scale` rows, leave `TOKENOMICS_DEPLOYMENT_ID` unset and use a Tokenomics 1.0 machine: the SDK refuses Market identity binding in Tokenomics mode.
+These are the underlying commands. In activation rows, `...` means the required flags: `--machine-type`, `--credential-subject-hex`, `--manufacturer`, `--tier` and `--did-document`. See `GUIDE.md#activation` for a complete example. For activation, `machine` and `monetize`, set `TOKENOMICS_DEPLOYMENT_ID` and verify the six legacy addresses after init (on mainnet CLI 0.0.13 or newer writes the 2.0 `EVENT_REGISTRY_ADDRESS`; 0.0.10 to 0.0.12 prefill the 1.0 one, and no version has an agung default). For the `scale` rows, leave `TOKENOMICS_DEPLOYMENT_ID` unset and use a Tokenomics 1.0 machine: the SDK refuses Market identity binding in Tokenomics mode.
 
 | Goal | Command |
 |------|---------|
@@ -102,6 +103,8 @@ These are the underlying commands. In activation rows, `...` means the required 
 | Auto-deliver after payment | `peaqos stream distribute --chunk-dir ./out --owner-private-key-file ./owner.key --confirmation-url <url> --order-id <id> --delivery s3 --s3 s3://bucket/prefix/` |
 | Pay for data | `peaqos stream pay --seller-address <addr> --amount <amt> --chain <peaq\|base\|solana> --order-id <id>` (add `--rpc-url <url>`: required for `base` and `solana`) |
 | Submit payment proof | `peaqos stream payproof --tx-hash <hash> --order-id <id> --confirmation-url <url> --chain <chain> --payer-address <buyer> --payee-address <seller> --amount <amt>` |
+| Read Verify status | `peaqos verify status <decimal-id> --json` (set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz`) |
+| Chip preflight | `peaqos verify chip prepare` / `controller-request` / `finalize` (see `knowledge/cli-reference.md`) |
 | Decrypt purchased data | `peaqos stream consume --chunk-dir ./out --access-dir ./buyer-access --data-dir ./out --buyer-private-key-file ./buyer.key --buyer-id <buyer-did> --output ./recovered.bin` |
 
 ---
@@ -110,7 +113,7 @@ These are the underlying commands. In activation rows, `...` means the required 
 
 ```
 peaqos-skill/
-├── AGENT-PROMPT.md               # Framework-agnostic orchestration (11-phase logic, routing, security)
+├── AGENT-PROMPT.md               # Framework-agnostic orchestration (12-phase logic, routing, security)
 ├── SKILL.md                      # Root skill entry (mirrors the Claude Code adapter)
 ├── TESTING.md                    # Manual test plan
 ├── manifest.json                 # Metadata, capability requirements, adapter list
@@ -118,7 +121,7 @@ peaqos-skill/
 ├── knowledge/
 │   ├── decision-tree.md          # Architecture questionnaire & recommendation matrix
 │   ├── concepts.md               # peaqID, MCR, trust levels, bond, DID services, Scale & Stream concepts
-│   ├── cli-reference.md          # Every command, flag, env var, exit code (incl. `peaqos scale` & `peaqos stream`)
+│   ├── cli-reference.md          # Every command, flag, env var, exit code (incl. `peaqos scale`, `peaqos stream` & `peaqos verify`)
 │   └── troubleshooting.md        # Symptom → cause → fix (incl. Scale auth & pairing, Stream keys & payment)
 ├── adapters/
 │   ├── claude-code/
@@ -143,7 +146,7 @@ peaqos-skill/
 | Faucet | [get-test-tokens](https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens) | n/a |
 | Gas station | Not available: use faucet + `--skip-funding` | `https://depinstation.peaq.xyz` |
 | Explorer | [agung-testnet.subscan.io](https://agung-testnet.subscan.io) | [peaq.subscan.io](https://peaq.subscan.io) |
-| Contract addresses | See `examples/.env.example` | Verify all six legacy addresses in `GUIDE.md`; supply EventRegistry explicitly |
+| Contract addresses | See `examples/.env.example` | Verify all six legacy addresses in `GUIDE.md`; check the EventRegistry is the 2.0 one for a 2.0 machine |
 
 ---
 

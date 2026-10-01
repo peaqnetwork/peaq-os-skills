@@ -54,11 +54,11 @@ When prompted:
 - **Deployment ID:** `agung-2026-08-28` (`TOKENOMICS_DEPLOYMENT_ID`, required by activate, machine and monetize).
 - **MCR API URL:** `https://mcr.peaq.xyz`
 - **Gas Station URL:** leave blank (not available on agung)
-- **Event Registry address:** the only contract address the wizard asks for; enter the agung value from `examples/.env.example`. `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` have no agung default either: fill them in `.env` after the wizard.
+- **Event Registry address:** the only contract address the wizard asks for; enter the agung value from `examples/.env.example` (`0x2DAD8905380993940e340C5cE6d313d5c2780040`, no agung default in any CLI version). `IDENTITY_REGISTRY_ADDRESS`, `IDENTITY_STAKING_ADDRESS` and `MACHINE_NFT_ADDRESS` have no agung default either: fill them in `.env` after the wizard.
 - **Orchestration API URL:** the default Machine Markets API is `https://orchestration.peaq.xyz`. Use that unless your platform admin gave you a different URL. If you're not planning to use Scale (Phase 9), hit enter to leave it blank.
 - **Orchestration API key:** leave blank unless your deployment requires one. If you later see an `AUTH_REQUIRED` error from a Scale command, that's the signal to set this and re-run.
 
-Known init bug in CLI 0.0.9 (fixed in CLI 0.0.10, where the prompt defaults to the network's Event Registry): `EVENT_REGISTRY_ADDRESS` has no default. An empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Fill it from the network table below and verify all six legacy addresses; on agung, IdentityRegistry, IdentityStaking and MachineNFT are written empty too. They are still required by the SDK constructor.
+The Event Registry default depends on the CLI version. On peaq mainnet, CLI 0.0.13 or newer writes the Tokenomics 2.0 EventRegistry `0xA1e7F1d7B24dAb55Dc92491e6d9B89F6E925Ad1e` with a `.env` comment naming it, so there is nothing to set by hand; an `EVENT_REGISTRY_ADDRESS` already in the environment still wins, and the CLI loads an existing `.env` into the environment before init, so edit a stale 1.0 value in `.env` to the 2.0 address (or remove the line) and unset a stale export first. CLI 0.0.10 to 0.0.12 prefill the mainnet network default, which is the 1.0 registry `0x43c6AF2E14dc1327dc3cc6c7117D1CD72fffEcbA`: replace it with the 2.0 address for a 2.0 machine. CLI 0.0.9 has no default on any network, and an empty value makes SDK client commands exit 3 with `Missing required env var: EVENT_REGISTRY_ADDRESS`. Verify all six legacy addresses against the network table below; on agung, IdentityRegistry, IdentityStaking and MachineNFT are written empty too. They are still required by the SDK constructor.
 
 Run `peaqos whoami`. Verify Chain ID 9990 and the `Tokenomics 2.0:` block with deployment `agung-2026-08-28`.
 
@@ -130,7 +130,7 @@ Event submitted.
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr-20.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
 
 ---
 
@@ -284,6 +284,8 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
+> **Solana onboarding is paused.** A peaq contract upgrade (CORE-801, live on peaq mainnet since 2026-09-30) removed the reservation call that peaqOS CLI 0.0.13 and SDK 0.9.0 use to start a Solana onboarding, so the `reservation` phase reverts. A CLI and SDK release for the new flow will follow. Until then, activate new machines on peaq ([Machine activation](#activation)). Machines already homed on Solana are still managed with `--chain solana`, and Solana payments (`stream pay --chain solana`) are not affected. The steps below describe the flow in CLI 0.0.13 and SDK 0.9.0 and apply again once the new release ships.
+
 This path needs `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16): `pip install -U 'peaq-os-cli[solana,ows]>=0.0.12'`. CLI 0.0.10 and older have no `--chain solana`; 0.0.11 has it, but its `solana` extra pins `peaq-os-sdk<0.8.0` and pip cannot resolve it.
 
 ```bash
@@ -430,7 +432,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`. With it unset, use `did:peaq:0x<address>` at `https://mcr.peaq.xyz`. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. With it unset, they take `did:peaq:0x<address>` and read the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -765,6 +767,36 @@ Every chunk is verified (hash, signature, chain link) before decryption; `--skip
 
 ---
 
+## Verify {#verify}
+
+> **Experimental.** Verify reads a machine's KYB and chip records and builds local chip preflight evidence. Nothing in the CLI writes a Verify record. Verify needs peaq-os-cli 0.0.14 or newer. Gate on `peaqos verify --help`: if it fails, offer `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then repeat the check. If it still fails, stop: the installed CLI still has no Verify commands.
+
+Reads need only the Verify API origin, no wallet, key, RPC or deployment ID:
+
+```bash
+export PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz   # or put it in .env, or pass --verify-api-url before the command name
+peaqos verify status <decimal-id>
+peaqos verify status <decimal-id> --json
+```
+
+`kyb` and `chip` each report `unverified`, `verified`, `expired` or `revoked`. `unverified` on an existing machine is a normal, successful read. There is no combined status. Verify on peaq mainnet reads peaq-homed machines only: a Solana-homed machine gets `Verify state is temporarily unavailable; retry later.` (exit 2) every time. For a peaq-homed machine that message can be transient; the CLI does not retry, so run the command once more after a short pause.
+
+Chip preflight is for machines homed on peaq with an Infineon OPTIGA Trust M Express secure element (CA306 chain). It starts from a challenge context issued by peaq's onboarding service and runs in three stages; the chip and the DID controller's wallet sign between them:
+
+```bash
+peaqos verify chip prepare --context context.json --certificate leaf.der --out prehash.bin
+# chip key 0xE0F0 signs prehash.bin (ECDSA without hashing) -> chip-signature.bin
+peaqos verify chip controller-request --context context.json --certificate leaf.der \
+  --chip-signature chip-signature.bin --out controller-message.bin
+# the current DID controller signs controller-message.bin once as an EIP-191 personal message -> controller-signature.bin (65 bytes)
+peaqos verify chip finalize --context context.json --certificate leaf.der \
+  --chip-signature chip-signature.bin --controller-signature controller-signature.bin --out evidence.json
+```
+
+The challenge expires after at most five minutes and every stage rechecks it. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
+
+---
+
 ## Network reference {#network-reference}
 
 ### agung testnet
@@ -775,7 +807,7 @@ Every chunk is verified (hash, signature, chain link) before decryption; `--skip
 | `TOKENOMICS_DEPLOYMENT_ID` | `agung-2026-08-28` |
 | Chain ID | 9990 |
 | RPC URL | `https://peaq-agung.api.onfinality.io/public` |
-| Legacy MCR API | `https://mcr.peaq.xyz` |
+| MCR API | None paired with `agung-2026-08-28`: `qualify mcr` and `show` exit 3 with `DEPLOYMENT_UNAVAILABLE` |
 | Gas Station | Not available: use web faucet |
 | Block explorer | https://agung-testnet.subscan.io |
 | Faucet | https://docs.peaq.xyz/peaqchain/build/getting-started/get-test-tokens |
@@ -792,10 +824,9 @@ Every chunk is verified (hash, signature, chain link) before decryption; `--skip
 |-----------|-------|
 | `PEAQOS_NETWORK` | `mainnet` |
 | `TOKENOMICS_DEPLOYMENT_ID` | `peaq-mainnet` |
-| 2.0 MCR API | `https://mcr-20.peaq.xyz` |
+| MCR API | `https://mcr.peaq.xyz` (used by CLI 0.0.14 / SDK 0.10.0) |
 | Chain ID | 3338 |
 | RPC URL | `https://peaq.api.onfinality.io/public` |
-| Legacy MCR API | `https://mcr.peaq.xyz` |
 | Gas Station | `https://depinstation.peaq.xyz` |
 | Transaction and block explorer | https://peaq.subscan.io |
 | `IDENTITY_REGISTRY_ADDRESS` | `0xb53Af985765031936311273599389b5B68aC9956` |
