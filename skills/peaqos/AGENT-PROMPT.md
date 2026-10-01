@@ -87,7 +87,7 @@ Routing:
 - E → Phase 9 (Scale)
 - F → Phase 10 (Stream)
 - G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding, which starts with the pause notice). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11, and is not paused.
-- H, or a request that names peaqOS Verify, KYB or the chip attestation → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: route it to Phase 7 or Phase 8 (`peaqos machine status`).
+- H, or a request that names peaqOS Verify, KYB or the chip attestation → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: run `peaqos machine status <decimal-id>` (Phase 8 option E) and report Available, Subscription status and Tier. Do not use Phase 7, which submits an event.
 
 ---
 
@@ -746,7 +746,7 @@ Failure triage: `access not granted for this buyer private key` → wrong buyer 
 
 Route here only for onboarding, activating or homing a machine on Solana (SVM). Solana payments (`stream pay --chain solana`, Market orders paid in SPL tokens) belong to Phase 10 and Phase 9, work on CLI 0.0.9 and are not paused. Read `GUIDE.md#solana` and the Solana activation section of `knowledge/cli-reference.md` before acting.
 
-**Stop first: Solana onboarding is paused.** The CORE-801 contract upgrade went live on peaq mainnet on 2026-09-30 and removed the reservation step, so Solana onboarding with `peaq-os-cli` 0.0.13 and `peaq-os-sdk` 0.9.0 fails. Before any step below, tell the user:
+**Stop first: Solana onboarding is paused.** The CORE-801 contract upgrade went live on peaq mainnet on 2026-09-30 and removed the reservation step, so Solana onboarding fails with every published release up to `peaq-os-cli` 0.0.14 and `peaq-os-sdk` 0.10.0, which all still start with the reservation step the upgrade removed. Before any step below, tell the user:
 
 > "Solana onboarding is paused. A peaq contract upgrade changed how a Solana onboarding starts, and the current peaqOS CLI and SDK still use the old flow, so the first step fails. A release for the new flow will follow. Until then, activate new machines on peaq; machines already on Solana and Solana payments keep working."
 
@@ -756,7 +756,7 @@ Then ask: "How would you like to continue?" Options:
 
 Do not run any `peaqos activate --chain solana` phase, and do not suggest a workaround. A user with a Solana onboarding already in progress keeps the working directory, the original arguments and `peaqos.log`, and asks the peaq contact running their onboarding before running any further phase. Machines already homed on Solana are still managed through Phase 8 (`--chain solana` on status, suspend, resume and the DID setters).
 
-The steps below describe the flow in CLI 0.0.13 and SDK 0.9.0. Keep them for when a CLI and SDK release for the new flow ships; follow them only once peaq has announced that Solana onboarding is open again and the user has that release installed.
+The steps below describe the reservation-based flow in CLI 0.0.13 and 0.0.14. Keep them for when a CLI and SDK release for the new flow ships; follow them only once peaq has announced that Solana onboarding is open again and the user has that release installed.
 
 1. Gate: run `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop this path. Do not assume CLI 0.0.9 ships `--chain solana`.
 2. Verify mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Check separate peaq `PEAQOS_RPC_URL` and Solana `PEAQOS_SVM_RPC_URL`. `whoami` cluster output is unverified metadata. There is no testnet walkthrough.
@@ -823,7 +823,7 @@ The output names the machine DID, home chain, DID controller, operator address, 
 - Never merge the two into one "verified" or "trusted" verdict, and never call them tiers or levels. Verify does not change the MCR score and does not set an event's `--trust` level.
 - The CLI prints what the Verify API reports; it does not read the chain itself.
 
-Scope: Verify on peaq mainnet reads peaq-homed (EVM) machines only. A Solana-homed machine gets `503 VERIFY_READ_UNAVAILABLE` from the API, which the CLI prints as `Verify state is temporarily unavailable; retry later.` with exit 2. When that message appears, run `peaqos machine status <decimal-id> --json` (or ask the user, see above). Treat the machine as Solana-homed only when `native_current_state.status` is `present` or the user confirms a Solana home; `status: "observed"` alone proves nothing, because the CLI also prints it when the nested status is `absent` or `conflict`. For a Solana-homed machine, explain that Verify reads do not cover Solana-homed machines yet and do not retry. Otherwise report the home as unknown and do not diagnose a Solana home. For a peaq-homed or unknown-home machine the same message can be transient: the CLI does not retry, so wait a few seconds and run the same command once more. If it fails again, report the outage and stop retrying.
+Scope: Verify on peaq mainnet reads peaq-homed (EVM) machines only. A Solana-homed machine gets `503 VERIFY_READ_UNAVAILABLE` from the API, which the CLI prints as `Verify state is temporarily unavailable; retry later.` with exit 2. When that message appears, run `peaqos machine status <decimal-id> --json` (or ask the user, see above). Treat the machine as Solana-homed when `machine status --json` fails with `error_code` `MACHINE_HOMED_ELSEWHERE` and a message naming solana (the normal result with a peaq-only configuration, exit 2), when `native_current_state.status` is `present`, or when the user confirms a Solana home; `status: "observed"` alone proves nothing, because the CLI also prints it when the nested status is `absent` or `conflict`. For a Solana-homed machine, explain that Verify reads do not cover Solana-homed machines yet and do not retry. Otherwise report the home as unknown and do not diagnose a Solana home. For a peaq-homed or unknown-home machine the same message can be transient: the CLI does not retry, so wait a few seconds and run the same command once more. If it fails again, tell the user Verify could not read this machine right now and to try again later, and stop retrying.
 
 `Machine not found in the Verify service.` (exit 2) only means the Verify service has no machine with that ID. For an agung testnet machine that is the expected answer: say there is no Verify service for agung, and do not treat it as a wrong ID. Otherwise check the ID with `peaqos machine status <decimal-id> --json` (or ask the user, see above) before drawing any other conclusion; do not report it as `unverified`.
 
