@@ -25,8 +25,8 @@ The DID document contains `verificationMethods`, `authentication` and `serviceEn
 
 ## Machine Credit Rating (MCR)
 
-**Technical:** A score (0–100) and tier label computed by the peaqOS MCR API from on-chain
-event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr.peaq.xyz`; otherwise they use address DIDs at the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
+**Technical:** A score (0 to 100) and tier label computed by the peaqOS MCR API from on-chain
+event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr.peaq.xyz`; address-DID reads (the variable unset, host from `PEAQOS_MCR_API_URL`) are no longer served. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
 Updated periodically by an off-chain indexer: there's typically a short lag after new events.
 
 **Tiers:**
@@ -63,7 +63,7 @@ than "here's the blockchain proof" (onchain) or "my tamper-proof chip signed thi
 
 ## Verify {#verify}
 
-**Technical:** Verify is peaq's attestation layer for machines, experimental in v1. It keeps two independent records per machine in the `AttestationRegistry` on peaq (mainnet Verify is EVM-only; there is no Verify service for agung testnet), read through the Verify API (`GET /v1/verify/machines/{machineId}`), the SDKs and `peaqos verify status`:
+**Technical:** Verify is peaq's attestation layer for machines, experimental in v1. It keeps two independent records per machine in the `AttestationRegistry` on peaq (this release covers peaq mainnet Verify only, and mainnet Verify is EVM-only), read through the Verify API (`GET /v1/verify/machines/{machineId}`), the SDKs and `peaqos verify status`:
 
 | Topic | Recorded on | A `verified` record means |
 |-------|-------------|---------------------------|

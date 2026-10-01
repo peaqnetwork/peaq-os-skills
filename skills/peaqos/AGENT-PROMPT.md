@@ -58,7 +58,7 @@ Also check for a prior run:
 
 Skip the `whoami` line when the user's opening request is about Verify, and never treat a failing `whoami` as a blocker for Phase 12: Verify reads need only `PEAQOS_VERIFY_API_URL`.
 
-For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. One exception: a user working with a Tokenomics 1.0 machine (`did:peaq:0x<address>`, onboarded before 2026-09-01) needs the variable **unset** for `qualify mcr`, `show machine` and `show operator machines`, because setting it switches those reads to the 2.0 server and rejects address DIDs. Ask which generation the machine is before treating a missing deployment ID as a misconfiguration. The same applies to Scale (Phase 9): its identity-binding commands only work with the variable unset, see the Tokenomics mode gate there. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
+For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. MCR reads (`qualify mcr`, `show machine`, `show operator machines`) need the variable set too, with decimal machine DIDs (`did:peaq:<decimal id>`). Address-DID reads for Tokenomics 1.0 machines (`did:peaq:0x<address>`) are no longer served, so a missing deployment ID is a misconfiguration for MCR reads as well. The one exception is Scale (Phase 9): its identity-binding commands only work with the variable unset, see the Tokenomics mode gate there. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
 
 If `peaqos whoami` succeeds and shows a configured address and the correct `TOKENOMICS_DEPLOYMENT_ID`, note it and offer to skip to Phase 6 (onboarding).
 
@@ -87,7 +87,7 @@ Routing:
 - E → Phase 9 (Scale)
 - F → Phase 10 (Stream)
 - G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding, which starts with the pause notice). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11, and is not paused.
-- H, or a request that names peaqOS Verify, KYB or the chip attestation → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: run `peaqos machine status <decimal-id>` (Phase 8 option E) and report Available, Subscription status and Tier. Do not use Phase 7, which submits an event.
+- H, or a request that names peaqOS Verify, KYB or the chip attestation, or asks whether a machine is verified, KYB'd or chip-verified ("is machine X verified?") → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: run `peaqos machine status <decimal-id>` (Phase 8 option E) and report Available, Subscription status and Tier. Do not use Phase 7, which submits an event.
 
 ---
 
@@ -399,7 +399,7 @@ grep -s "^PEAQOS_ORCHESTRATION_URL=." .env || echo "${PEAQOS_ORCHESTRATION_URL:-
 
 - `SCALE_MISSING` → use the preamble command-group-missing upgrade fallback.
 
-**Tokenomics mode gate.** With `TOKENOMICS_DEPLOYMENT_ID` set, the CLI builds the SDK client in Tokenomics mode, and the SDK refuses every orchestration call that binds a machine identity (`scale machine onboard | list | status`, `scale agent pair`, `scale search`) with `TokenomicsIntegrationUnavailableError` ("orchestration identity binding"). The Market verifies identities against the Tokenomics 1.0 MCR, so Scale works today for **1.0 machines** (`did:peaq:0x<address>`) from a `.env` **without** `TOKENOMICS_DEPLOYMENT_ID`. A machine activated under Economics 2.0 cannot be registered in the Market yet; tell the user so instead of retrying.
+**Tokenomics mode gate.** With `TOKENOMICS_DEPLOYMENT_ID` set, the CLI builds the SDK client in Tokenomics mode, and the SDK refuses every orchestration call that binds a machine identity (`scale machine onboard | list | status`, `scale agent pair`, `scale search`) with `TokenomicsIntegrationUnavailableError` ("orchestration identity binding"). The Market verifies identities against the Tokenomics 1.0 MCR, so Scale works today for **1.0 machines** (`did:peaq:0x<address>`) from a `.env` **without** `TOKENOMICS_DEPLOYMENT_ID`. That unset `.env` is for Scale only: MCR reads (`qualify mcr`, `show machine`) need `TOKENOMICS_DEPLOYMENT_ID` set and a decimal DID, and address-DID MCR reads are no longer served. A machine activated under Economics 2.0 cannot be registered in the Market yet; tell the user so instead of retrying.
 
 - `NOT_CONFIGURED` → Scale needs an existing **Tokenomics 1.0** machine identity (`did:peaq:0x<address>`) plus a `.env` with the signer and the six legacy addresses and **without** `TOKENOMICS_DEPLOYMENT_ID`. Running Phases 2–7 does not help: they activate a 2.0 machine, which the gate above rejects. If the user has no 1.0 machine, say that Scale is not available for their machine yet and stop.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
@@ -781,9 +781,9 @@ peaqos verify --help >/dev/null 2>&1 && echo "VERIFY_OK" || echo "VERIFY_MISSING
 
 - `VERIFY_MISSING` → the installed CLI has no Verify commands. Verify needs peaq-os-cli 0.0.14 or newer. Offer to run `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then repeat the check. If `peaqos verify --help` still fails, tell the user Verify needs peaq-os-cli 0.0.14 or newer but the installed CLI still has no Verify commands, and stop this phase. Gate on the help check only, never on a version number, and do not install from a source branch or a test package index.
 - `VERIFY_OK` → tell the user, before anything else:
-  > "peaqOS Verify is experimental. This tool only reads a machine's KYB and chip status and prepares chip evidence locally; it cannot mark a machine verified, and the commands may still change."
+  > "peaqOS Verify is experimental. This tool only reads a machine's KYB and chip status and prepares chip evidence locally; it cannot mark a machine verified. The command names are stable for v1 beta, the output may still change."
 
-Scope: there is no Verify service for agung testnet. Verify covers peaq mainnet machines only. For an agung machine, say so and do not run V1.
+Scope: this release covers peaq mainnet Verify only. For an agung testnet machine, say so and do not run V1.
 
 Verify needs no wallet, private key, RPC or `TOKENOMICS_DEPLOYMENT_ID`. V1 needs only `PEAQOS_VERIFY_API_URL`; V2 needs no URL. Do not probe the URL yourself: run the read and let the CLI validate it. On exit 3 with `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.`, tell the user:
   > "`peaqos verify status` needs the Verify API origin. Set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in your `.env` or your environment, or pass `--verify-api-url https://mcr.peaq.xyz` before the command name. A variable exported as empty in your shell overrides `.env`, so unset it if you use `.env`."
@@ -791,7 +791,7 @@ Verify needs no wallet, private key, RPC or `TOKENOMICS_DEPLOYMENT_ID`. V1 needs
 
 Some errors below fall back to `peaqos machine status <decimal-id> --json`. That command needs chain configuration (RPC, `TOKENOMICS_DEPLOYMENT_ID`, the six legacy addresses). If it cannot run (for example exit 3 on missing configuration), do not retry it and do not set up chain configuration for it: ask the user which chain the machine is homed on and proceed on their answer.
 
-Ask the user: "What would you like to do with Verify?" Wait for their response. Options:
+If the request already names the action (a status question about a machine is V1), skip this question and go straight to that flow. Otherwise ask the user: "What would you like to do with Verify?" Wait for their response. Options:
 - V1: Read a machine's Verify status
 - V2: Prepare chip evidence for peaq's onboarding service
 - V3: Troubleshoot a Verify error
@@ -804,12 +804,13 @@ Routing: V1 → status flow · V2 → chip preflight flow · V3 → read `knowle
 
 Collect the decimal machine ID (`1` to `2^256-1`, no leading zeros). If the user gives `did:peaq:<decimal id>`, pass the decimal part. `verify status` takes no DID and no address, so an address DID (`did:peaq:0x…`) cannot be looked up.
 
+Run the read once, with `--json`, then report from that output; do not run a second read:
+
 ```
-peaqos verify status <decimal-id>
 peaqos verify status <decimal-id> --json
 ```
 
-The output names the machine DID, home chain, DID controller, operator address, one status for `kyb` and one for `chip`, and `Source: Verify API`. Report the two statuses separately, one line each:
+The JSON names the machine DID, home chain, DID controller, operator address and one status each for `kyb` and `chip` (`verification.kyb.status`, `verification.chip.status`). Errors print the same fixed `Error:` message and exit code as without `--json`. Report the two statuses separately, one line each:
 
 | Status | Say |
 |--------|-----|
@@ -825,7 +826,7 @@ The output names the machine DID, home chain, DID controller, operator address, 
 
 Scope: Verify on peaq mainnet reads peaq-homed (EVM) machines only. A Solana-homed machine gets `503 VERIFY_READ_UNAVAILABLE` from the API, which the CLI prints as `Verify state is temporarily unavailable; retry later.` with exit 2. When that message appears, run `peaqos machine status <decimal-id> --json` (or ask the user, see above). Treat the machine as Solana-homed when `machine status --json` fails with `error_code` `MACHINE_HOMED_ELSEWHERE` and a message naming solana (the normal result with a peaq-only configuration, exit 2), when `native_current_state.status` is `present`, or when the user confirms a Solana home; `status: "observed"` alone proves nothing, because the CLI also prints it when the nested status is `absent` or `conflict`. For a Solana-homed machine, explain that Verify reads do not cover Solana-homed machines yet and do not retry. Otherwise report the home as unknown and do not diagnose a Solana home. For a peaq-homed or unknown-home machine the same message can be transient: the CLI does not retry, so wait a few seconds and run the same command once more. If it fails again, tell the user Verify could not read this machine right now and to try again later, and stop retrying.
 
-`Machine not found in the Verify service.` (exit 2) only means the Verify service has no machine with that ID. For an agung testnet machine that is the expected answer: say there is no Verify service for agung, and do not treat it as a wrong ID. Otherwise check the ID with `peaqos machine status <decimal-id> --json` (or ask the user, see above) before drawing any other conclusion; do not report it as `unverified`.
+`Machine not found in the Verify service.` (exit 2) only means the Verify service has no machine with that ID. A 404 never means `unverified`. First ask the user to check the machine ID, then ask about the chain. This release covers peaq mainnet Verify only, so for an agung testnet demo machine this answer is expected: say so, and do not treat it as a wrong ID. If the ID is right and the machine is not on agung, run `peaqos machine status <decimal-id> --json` (or ask the user, see above) before drawing any other conclusion.
 
 ---
 
@@ -839,7 +840,7 @@ Check before starting, and stop with the reason if any answer is no:
 - The user has a challenge context file (`context.json`) from peaq's onboarding service. The challenge and evidence API routes accept only peaq's onboarding service token: never call them, and never tell the user to call them. Without a context file, tell the user to ask the peaq contact running their onboarding.
 - The machine's current DID controller, named by `didController` in `context.json`, can sign an EIP-191 personal message. After activation that is the configured signer in Architecture A and the operator in Architecture B, unless the controller was changed since.
 
-The challenge is valid for at most five minutes and every stage rechecks it against the local clock, so have the chip tooling and the controller wallet ready before step 1, and make sure the clock of the host running the CLI is correct. Each `--out` path must not exist yet; the CLI creates it with mode `0600` and never overwrites.
+The challenge is valid for at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock, so have the chip tooling and the controller wallet ready before step 1, and make sure the clock of the host running the CLI is correct. Each `--out` path must not exist yet; the CLI creates it with mode `0600` and never overwrites.
 
 1. Build the chip prehash:
    ```

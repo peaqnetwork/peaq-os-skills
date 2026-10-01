@@ -432,7 +432,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. With it unset, they take `did:peaq:0x<address>` and read the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. MCR reads need it set: with it unset the CLI sends `did:peaq:0x<address>` DIDs to the host in `PEAQOS_MCR_API_URL`, and those address-DID reads are no longer served. CLI 0.0.13 and older use `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -793,7 +793,7 @@ peaqos verify chip finalize --context context.json --certificate leaf.der \
   --chip-signature chip-signature.bin --controller-signature controller-signature.bin --out evidence.json
 ```
 
-The challenge expires after at most five minutes and every stage rechecks it. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
+The challenge expires after at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
 
 ---
 
