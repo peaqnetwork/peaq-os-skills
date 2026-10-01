@@ -26,7 +26,7 @@ The DID document contains `verificationMethods`, `authentication` and `serviceEn
 ## Machine Credit Rating (MCR)
 
 **Technical:** A score (0–100) and tier label computed by the peaqOS MCR API from on-chain
-event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr-20.peaq.xyz`; otherwise they use address DIDs at the host in `PEAQOS_MCR_API_URL`. `mcr.peaq.xyz` and `mcr-20.peaq.xyz` serve the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
+event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr.peaq.xyz`; otherwise they use address DIDs at the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
 Updated periodically by an off-chain indexer: there's typically a short lag after new events.
 
 **Tiers:**
@@ -67,7 +67,7 @@ than "here's the blockchain proof" (onchain) or "my tamper-proof chip signed thi
 
 | Topic | Recorded on | A `verified` record means |
 |-------|-------------|---------------------------|
-| `kyb` | The machine's current operator address | peaq verified the business behind that address. Every machine the address operates reads the same status. |
+| `kyb` | The machine's current operator address | peaq recorded an on-chain KYB attestation for the operator address after due diligence on the operator's business. Every machine the address operates reads the same status. |
 | `chip` | The machine ID | The machine's secure element signed a challenge and its certificate chained to the manufacturer root. |
 
 Each topic reads `unverified` (no record yet; the normal state of an existing machine), `verified`, `expired` or `revoked`. Revocation wins over expiry. There is no aggregate verified flag.
@@ -76,7 +76,7 @@ v1 supports one chip: Infineon OPTIGA Trust M Express with a leaf certificate un
 
 Verify attests the machine, not individual events. It does not change the MCR score and does not set an event's trust level; `--trust hardware` stays a value you choose per event.
 
-**Plain English:** Verify records two separate checks by peaq: whether the company operating the machine passed KYB, and whether the machine's Infineon chip passed peaq's chip check. Neither one makes the machine "trusted" overall.
+**Plain English:** Verify records two separate checks by peaq: whether peaq recorded a KYB attestation for the operator address after due diligence, and whether the machine's Infineon chip passed peaq's chip check. Neither one makes the machine "trusted" overall.
 
 ---
 

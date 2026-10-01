@@ -129,7 +129,7 @@ Machine writes reconcile the recorded action before previewing or submitting. Do
 
 | Symptom | Exit | Action |
 |---------|------|--------|
-| DID rejected for deployment mode | 1 | With `TOKENOMICS_DEPLOYMENT_ID`, use `did:peaq:<decimal machine id>` (reads go to `mcr-20.peaq.xyz`; `mcr.peaq.xyz` serves the same API). Without it, use `did:peaq:0x<address>` against the host in `PEAQOS_MCR_API_URL`. `show operator machines` always takes an address DID. |
+| DID rejected for deployment mode | 1 | With `TOKENOMICS_DEPLOYMENT_ID`, use `did:peaq:<decimal machine id>` (reads go to `mcr.peaq.xyz`; CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API). Without it, use `did:peaq:0x<address>` against the host in `PEAQOS_MCR_API_URL`. `show operator machines` always takes an address DID. |
 | Missing private key or legacy address | 3 | On CLI 0.0.9 `qualify mcr` and `show` build the full SDK client: supply `PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET` plus all six legacy addresses in `.env`. The Solana release reads MCR over HTTP only and never raises this for these commands. |
 | `SERVICE_UNAVAILABLE` | 2 | MCR or its operator index is unavailable or syncing. Retry later. `show machine` also reads MCR; use `machine status <decimal-id> --json` for independent chain state. |
 | Machine not found | 2 | Confirm ID and deployment, then inspect chain state. An indexer delay is possible but is not proof of a successful activation. |
@@ -171,12 +171,12 @@ Verify is experimental. Read the exact message and exit code; the CLI prints fix
 
 **Symptom:** `peaqos verify --help` fails / `No such command 'verify'`
 **Cause:** The installed CLI has no Verify commands.
-**Fix:** `pip install -U peaq-os-cli`, then check `peaqos verify --help` again. If it still fails, the published CLI does not include Verify yet. Do not install from a source branch or a test index.
+**Fix:** Verify needs peaq-os-cli 0.0.14 or newer. Offer `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then check `peaqos verify --help` again. If it still fails, stop: the installed CLI still has no Verify commands. Do not install from a source branch or a test index.
 
 | Message | Exit | Action |
 |---------|------|--------|
 | `Set PEAQOS_VERIFY_API_URL to a valid HTTPS origin.` | 3 | Set `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz` in `.env` or the shell, or pass `--verify-api-url https://mcr.peaq.xyz` before the command name. An empty `--verify-api-url` wins over the variable and fails the same way. `http://` is rejected. |
-| `Install a peaq-os-sdk package with public Verify read support.` | 3 | The SDK under the CLI lacks `peaq_os_sdk.verify`. Upgrade both: `pip install -U peaq-os-cli peaq-os-sdk`. |
+| `Install a peaq-os-sdk package with public Verify read support.` | 3 | The SDK under the CLI lacks `peaq_os_sdk.verify`. After the user agrees, run `pip install -U 'peaq-os-cli>=0.0.14'` to install the compatible SDK dependency, then check `peaqos verify --help` again. |
 | `MACHINE_ID must be a canonical decimal integer in 1..2^256-1 (no leading zeros).` | 1 | Pass the decimal machine ID, not a DID, address, hex or zero-padded value. |
 | `Machine not found in the Verify service.` | 2 | API `404 MACHINE_NOT_FOUND`. It only means the Verify service has no machine with that ID. There is no Verify service for agung testnet: for an agung machine this answer is expected, not a wrong ID. Otherwise check the ID with `peaqos machine status <decimal-id> --json`; do not report it as `unverified`. |
 | `Verify state is temporarily unavailable; retry later.` | 2 | API `503 VERIFY_READ_UNAVAILABLE` or `INTERNAL_ERROR`. For a Solana-homed machine this is permanent on mainnet: Verify reads are EVM-only, do not retry. Count a machine as Solana-homed only when `machine status --json` shows `native_current_state.status` `present` or the user confirms it; `status: "observed"` alone does not prove it. If `machine status` cannot run, ask the user for the home chain. For a peaq-homed machine it can be transient; the CLI does not retry, so run the command once more after a short pause. |

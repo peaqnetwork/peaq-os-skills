@@ -160,7 +160,7 @@ Use activity + value 0 for first event: always valid, no FX complexity.
 ```
 peaqos qualify mcr did:peaq:<captured-decimal-id>
 ```
-Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr-20.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set (`mcr.peaq.xyz` serves the same Tokenomics 2.0 API). On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; CLI 0.0.10 uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
+Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; CLI 0.0.10 uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
 
 Print a proof block only for verified results. Leave event/rating status pending or failed if that step did not succeed:
 ```
@@ -779,7 +779,7 @@ Read `knowledge/cli-reference.md` (`peaqos verify` section) and `knowledge/conce
 peaqos verify --help >/dev/null 2>&1 && echo "VERIFY_OK" || echo "VERIFY_MISSING"
 ```
 
-- `VERIFY_MISSING` → the installed CLI has no Verify commands. Offer to run `pip install -U peaq-os-cli` and run it only after the user agrees, then repeat the check. If `peaqos verify --help` still fails, tell the user the published CLI does not include Verify yet and stop this phase. Gate on the help check only, never on a version number, and do not install from a source branch or a test package index.
+- `VERIFY_MISSING` → the installed CLI has no Verify commands. Verify needs peaq-os-cli 0.0.14 or newer. Offer to run `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then repeat the check. If `peaqos verify --help` still fails, tell the user Verify needs peaq-os-cli 0.0.14 or newer but the installed CLI still has no Verify commands, and stop this phase. Gate on the help check only, never on a version number, and do not install from a source branch or a test package index.
 - `VERIFY_OK` → tell the user, before anything else:
   > "peaqOS Verify is experimental. This tool only reads a machine's KYB and chip status and prepares chip evidence locally; it cannot mark a machine verified, and the commands may still change."
 
@@ -818,7 +818,7 @@ The output names the machine DID, home chain, DID controller, operator address, 
 | `expired` | A record existed and its validity period ended. A new one goes through peaq again. |
 | `revoked` | peaq withdrew the record. Revocation wins over expiry. |
 
-- `kyb` belongs to the operator address shown in the output: every machine that address operates reads the same KYB status. KYB is a process run with peaq, not a CLI command.
+- `kyb` belongs to the operator address shown in the output: every machine that address operates reads the same KYB status. KYB in Verify is an on-chain attestation peaq recorded for the operator address after due diligence on the operator's business, not a full KYB process or a CLI command.
 - `chip` belongs to the machine ID and comes from the chip preflight and peaq's intake (V2).
 - Never merge the two into one "verified" or "trusted" verdict, and never call them tiers or levels. Verify does not change the MCR score and does not set an event's `--trust` level.
 - The CLI prints what the Verify API reports; it does not read the chain itself.

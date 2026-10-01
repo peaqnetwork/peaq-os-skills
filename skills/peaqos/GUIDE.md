@@ -130,7 +130,7 @@ Event submitted.
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr-20.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, reads go to `mcr.peaq.xyz`; `agung-2026-08-28` has no paired MCR, so `qualify mcr` and `show machine` exit 3 with `DEPLOYMENT_UNAVAILABLE` there and `machine status` is the only check. Event submission and MCR availability depend on the selected deployment. Report service errors honestly; do not claim an event or rating succeeded without evidence. `show machine` also uses the MCR API. Use `peaqos machine status <decimal-id> --json` to confirm chain state independently.
 
 ---
 
@@ -432,7 +432,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr-20.peaq.xyz`, the host the SDK deployment record names. With it unset, they take `did:peaq:0x<address>` and read the host in `PEAQOS_MCR_API_URL`. `https://mcr.peaq.xyz` and `https://mcr-20.peaq.xyz` serve the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. With it unset, they take `did:peaq:0x<address>` and read the host in `PEAQOS_MCR_API_URL`. CLI 0.0.13 and older use `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -769,7 +769,7 @@ Every chunk is verified (hash, signature, chain link) before decryption; `--skip
 
 ## Verify {#verify}
 
-> **Experimental.** Verify reads a machine's KYB and chip records and builds local chip preflight evidence. Nothing in the CLI writes a Verify record. Gate on `peaqos verify --help`: if it fails after `pip install -U peaq-os-cli`, the installed release has no Verify commands.
+> **Experimental.** Verify reads a machine's KYB and chip records and builds local chip preflight evidence. Nothing in the CLI writes a Verify record. Verify needs peaq-os-cli 0.0.14 or newer. Gate on `peaqos verify --help`: if it fails, offer `pip install -U 'peaq-os-cli>=0.0.14'` and run it only after the user agrees, then repeat the check. If it still fails, stop: the installed CLI still has no Verify commands.
 
 Reads need only the Verify API origin, no wallet, key, RPC or deployment ID:
 
@@ -824,7 +824,7 @@ The challenge expires after at most five minutes and every stage rechecks it. Ha
 |-----------|-------|
 | `PEAQOS_NETWORK` | `mainnet` |
 | `TOKENOMICS_DEPLOYMENT_ID` | `peaq-mainnet` |
-| MCR API | `https://mcr-20.peaq.xyz` (used by the CLI and SDK); `https://mcr.peaq.xyz` serves the same Tokenomics 2.0 API |
+| MCR API | `https://mcr.peaq.xyz` (used by CLI 0.0.14 / SDK 0.10.0) |
 | Chain ID | 3338 |
 | RPC URL | `https://peaq.api.onfinality.io/public` |
 | Gas Station | `https://depinstation.peaq.xyz` |
