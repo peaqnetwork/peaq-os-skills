@@ -310,7 +310,7 @@ Event submitted.
 
 ## `peaqos qualify mcr`
 
-With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr.peaq.xyz`. MCR reads need the deployment ID: without it the CLI sends address DIDs (`did:peaq:0x<address>`) to the host in `PEAQOS_MCR_API_URL`, and those reads are no longer served. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `DEPLOYMENT_UNAVAILABLE` before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; CLI 0.0.10 moves them to an HTTP-only query client that needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, use `did:peaq:<decimal machine id>` and reads go to `https://mcr.peaq.xyz`. MCR reads need the deployment ID: without it the CLI sends address DIDs (`did:peaq:0x<address>`) to the host in `PEAQOS_MCR_API_URL`, and those reads are no longer served. On `agung-2026-08-28` there is no paired MCR: `qualify mcr` and `show` exit `3` with `CONFIG_ERROR` (`The SDK rejected the selected MCR deployment`) before any request; use `peaqos machine status` there. In CLI 0.0.9 both commands build an SDK client, so they need a signer source (`PEAQOS_PRIVATE_KEY`, or `PEAQOS_OWS_WALLET`, which unlocks the wallet) and the six legacy contract addresses in `.env`; CLI 0.0.10 moves them to an HTTP-only query client that needs neither.
 
 ```bash
 peaqos qualify mcr did:peaq:<decimal-id>
@@ -810,7 +810,7 @@ peaqos scale order dispute <order-id> \
 Manage a machine's **Economics 2.0 monetization** decision in the MCR: `status` is a public read; `opt-in` and `opt-out` are signed, off-chain decisions. Thin wrappers over the SDK's [opt-in client](https://docs.peaq.xyz/peaqos/sdk-reference/monetization-opt-in): the SDK runs the compatibility check, EIP-191 signing, retries, HTTP, and response validation; the CLI adds parsing, prompts, and output.
 
 
-  **Live on `peaq-mainnet` since 2026-09-05.** The 2.0 MCR at `https://mcr.peaq.xyz` publishes the `/.well-known/peaq-monetization` signal and serves the mirrored 2.0 machines; `peaqos monetize status <decimal id>` returns `PENDING` for a machine that has never opted in. `agung-2026-08-28` has no paired MCR and exits `3` with `DEPLOYMENT_UNAVAILABLE`.
+  **Live on `peaq-mainnet` since 2026-09-05.** The 2.0 MCR at `https://mcr.peaq.xyz` publishes the `/.well-known/peaq-monetization` signal and serves the mirrored 2.0 machines; `peaqos monetize status <decimal id>` returns `PENDING` for a machine that has never opted in. `agung-2026-08-28` has no paired MCR and exits `3` with `CONFIG_ERROR` (`The SDK rejected the selected MCR deployment`).
 
 
 ```text

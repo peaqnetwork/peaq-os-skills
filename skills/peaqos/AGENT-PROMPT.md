@@ -58,7 +58,7 @@ Also check for a prior run:
 
 Skip the `whoami` line when the user's opening request is about Verify, and never treat a failing `whoami` as a blocker for Phase 12: Verify reads need only `PEAQOS_VERIFY_API_URL`.
 
-For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. MCR reads (`qualify mcr`, `show machine`, `show operator machines`) need the variable set too, with decimal machine DIDs (`did:peaq:<decimal id>`). Address-DID reads for Tokenomics 1.0 machines (`did:peaq:0x<address>`) are no longer served, so a missing deployment ID is a misconfiguration for MCR reads as well. The one exception is Scale (Phase 9): its identity-binding commands only work with the variable unset, see the Tokenomics mode gate there. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
+For every chain config check in this prompt, verify `TOKENOMICS_DEPLOYMENT_ID` matches the RPC (`peaq-mainnet` or `agung-2026-08-28`) and inspect the full `Tokenomics 2.0:` block. MCR reads (`qualify mcr`, `show machine`, `show operator machines`) need the variable set too. `qualify mcr` and `show machine` take decimal machine DIDs (`did:peaq:<decimal id>`); `show operator machines` takes an operator address DID (`did:peaq:0x<address>`). Address-DID reads for Tokenomics 1.0 machines (`did:peaq:0x<address>`) are no longer served, so a missing deployment ID is a misconfiguration for MCR reads as well. The one exception is Scale (Phase 9): its identity-binding commands only work with the variable unset, see the Tokenomics mode gate there. Verify the six legacy addresses, especially `EVENT_REGISTRY_ADDRESS`, without exposing private keys. Offline Stream needs none of this.
 
 If `peaqos whoami` succeeds and shows a configured address and the correct `TOKENOMICS_DEPLOYMENT_ID`, note it and offer to skip to Phase 6 (onboarding).
 
@@ -160,7 +160,7 @@ Use activity + value 0 for first event: always valid, no FX complexity.
 ```
 peaqos qualify mcr did:peaq:<captured-decimal-id>
 ```
-Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; CLI 0.0.10 uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `DEPLOYMENT_UNAVAILABLE` (no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
+Poll briefly if the MCR service is available. Both `qualify mcr` and `show machine` read the MCR API, using decimal DIDs at `mcr.peaq.xyz` when `TOKENOMICS_DEPLOYMENT_ID` is set. The host comes from the installed SDK's deployment record: `peaq-os-sdk` 0.7.0 to 0.9.0 (CLI 0.0.13 pins 0.9.x) use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 API. On CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and all six legacy addresses; CLI 0.0.10 uses an HTTP-only query client that needs neither. On `agung-2026-08-28` they exit 3 with `CONFIG_ERROR` (`The SDK rejected the selected MCR deployment`: agung has no paired MCR), so use `machine status` there. Use `peaqos machine status <captured-decimal-id> --json` for chain-state confirmation. Report unsupported event or MCR service errors rather than claiming success or indexer lag without evidence.
 
 Print a proof block only for verified results. Leave event/rating status pending or failed if that step did not succeed:
 ```
@@ -327,7 +327,7 @@ peaqos qualify event \
 ```
 peaqos qualify mcr did:peaq:<decimal-id>
 ```
-Both this and `show machine` use the MCR service; on CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses, CLI 0.0.10 needs neither (HTTP-only query client); on agung they exit 3 with `DEPLOYMENT_UNAVAILABLE` because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
+Both this and `show machine` use the MCR service; on CLI 0.0.9 they need a signer source (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses, CLI 0.0.10 needs neither (HTTP-only query client); on agung they exit 3 with `CONFIG_ERROR` (`The SDK rejected the selected MCR deployment`) because agung has no paired MCR. If unavailable, report the error and use `peaqos machine status <decimal-id> --json` for chain state. Do not equate MCR availability with activation success.
 
 4. Print proof block (same format as Phase 2 demo proof block).
 
@@ -401,7 +401,7 @@ grep -s "^PEAQOS_ORCHESTRATION_URL=." .env || echo "${PEAQOS_ORCHESTRATION_URL:-
 
 **Tokenomics mode gate.** With `TOKENOMICS_DEPLOYMENT_ID` set, the CLI builds the SDK client in Tokenomics mode, and the SDK refuses every orchestration call that binds a machine identity (`scale machine onboard | list | status`, `scale agent pair`, `scale search`) with `TokenomicsIntegrationUnavailableError` ("orchestration identity binding"). The Market verifies identities against the Tokenomics 1.0 MCR, so Scale works today for **1.0 machines** (`did:peaq:0x<address>`) from a `.env` **without** `TOKENOMICS_DEPLOYMENT_ID`. That unset `.env` is for Scale only: MCR reads (`qualify mcr`, `show machine`) need `TOKENOMICS_DEPLOYMENT_ID` set and a decimal DID, and address-DID MCR reads are no longer served. A machine activated under Economics 2.0 cannot be registered in the Market yet; tell the user so instead of retrying.
 
-- `NOT_CONFIGURED` → Scale needs an existing **Tokenomics 1.0** machine identity (`did:peaq:0x<address>`) plus a `.env` with the signer and the six legacy addresses and **without** `TOKENOMICS_DEPLOYMENT_ID`. Running Phases 2–7 does not help: they activate a 2.0 machine, which the gate above rejects. If the user has no 1.0 machine, say that Scale is not available for their machine yet and stop.
+- `NOT_CONFIGURED` → Scale needs an existing **Tokenomics 1.0** machine identity (`did:peaq:0x<address>`) plus a `.env` with the signer and the six legacy addresses and **without** `TOKENOMICS_DEPLOYMENT_ID`. Running Phases 2 to 7 does not help: they activate a 2.0 machine, which the gate above rejects. If the user has no 1.0 machine, say that Scale is not available for their machine yet and stop.
 - `PEAQOS_ORCHESTRATION_URL` missing → tell user:
   > "Scale requires `PEAQOS_ORCHESTRATION_URL` to be set. Add `PEAQOS_ORCHESTRATION_URL=https://orchestration.peaq.xyz` to your `.env` (that's the default Machine Markets endpoint: replace it only if your platform admin gave you a different one)."
   Do not fix this with `peaqos init`: the wizard writes `TOKENOMICS_DEPLOYMENT_ID`, which switches the client into the mode Scale refuses. Do not proceed until set.
@@ -804,7 +804,7 @@ Routing: V1 → status flow · V2 → chip preflight flow · V3 → read `knowle
 
 Collect the decimal machine ID (`1` to `2^256-1`, no leading zeros). If the user gives `did:peaq:<decimal id>`, pass the decimal part. `verify status` takes no DID and no address, so an address DID (`did:peaq:0x…`) cannot be looked up.
 
-Run the read once, with `--json`, then report from that output; do not run a second read:
+Run one read with `--json` and report from that output. Do not repeat a successful read; retry a failure only where the error handling below says so:
 
 ```
 peaqos verify status <decimal-id> --json

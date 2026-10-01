@@ -26,7 +26,7 @@ The DID document contains `verificationMethods`, `authentication` and `serviceEn
 ## Machine Credit Rating (MCR)
 
 **Technical:** A score (0 to 100) and tier label computed by the peaqOS MCR API from on-chain
-event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr.peaq.xyz`; address-DID reads (the variable unset, host from `PEAQOS_MCR_API_URL`) are no longer served. CLI 0.0.13 and older use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
+event history, bond status, trust levels, and FX-adjusted revenue. Queried at `GET /mcr/{did}`. With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal DIDs at `mcr.peaq.xyz`; address-DID reads (the variable unset, host from `PEAQOS_MCR_API_URL`) are no longer served. The host comes from the installed SDK's deployment record: `peaq-os-sdk` 0.7.0 to 0.9.0 (CLI 0.0.13 pins 0.9.x) use `mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. Operator DIDs always identify an address.
 Updated periodically by an off-chain indexer: there's typically a short lag after new events.
 
 **Tiers:**
