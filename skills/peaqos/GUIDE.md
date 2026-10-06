@@ -784,8 +784,12 @@ peaqos verify status <decimal-id> --json
 Chip preflight is for machines homed on peaq with an Infineon OPTIGA Trust M Express secure element (CA306 chain). It starts from a challenge context issued by peaq's onboarding service and runs in three stages; the chip and the DID controller's wallet sign between them:
 
 ```bash
+# context.json: the six fields chainId, didController, expiresAt, machineDid, machineId, nonce of the challenge
+#   jq '{chainId, didController, expiresAt, machineDid, machineId, nonce}' challenge.json > context.json
+# leaf.der: trustm_cert -r 0xe0e0 -o leaf.pem && openssl x509 -in leaf.pem -outform DER -out leaf.der
 peaqos verify chip prepare --context context.json --certificate leaf.der --out prehash.bin
-# chip key 0xE0F0 signs prehash.bin (ECDSA without hashing) -> chip-signature.bin
+# chip key 0xE0F0 signs prehash.bin (ECDSA without hashing, no -H), header stripped -> chip-signature.bin
+#   trustm_ecc_sign -k 0xe0f0 -i prehash.bin -o chip-signature.der && tail -c +3 chip-signature.der > chip-signature.bin
 peaqos verify chip controller-request --context context.json --certificate leaf.der \
   --chip-signature chip-signature.bin --out controller-message.bin
 # the current DID controller signs controller-message.bin once as an EIP-191 personal message -> controller-signature.bin (65 bytes)
@@ -793,7 +797,7 @@ peaqos verify chip finalize --context context.json --certificate leaf.der \
   --chip-signature chip-signature.bin --controller-signature controller-signature.bin --out evidence.json
 ```
 
-The challenge expires after at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only. Full flags, output and exit codes: `knowledge/cli-reference.md`.
+The challenge expires after at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock. Hand `evidence.json` to the peaq contact who issued `context.json` and delete the artifacts afterwards. `finalize` succeeding is local preflight only, not a verified machine; `Revocation Status: not_evaluated` means revocation was not checked locally. The challenge and evidence API routes are for peaq's onboarding service only; `chip` reads `verified` once peaq records the chip attestation, not when the evidence is accepted. Full flags, output and exit codes: `knowledge/cli-reference.md`. Full flow: https://docs.peaq.xyz/peaqos/functions/verify#verify-a-chip-end-to-end.
 
 ---
 

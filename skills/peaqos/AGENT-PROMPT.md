@@ -837,17 +837,25 @@ The chip commands turn a challenge, the chip's leaf certificate and two signatur
 Check before starting, and stop with the reason if any answer is no:
 - The machine's secure element is an Infineon OPTIGA Trust M Express with a leaf certificate under the Infineon CA306 chain. No other chip, TPM or software key is supported.
 - The machine is homed on peaq mainnet. Chip intake is EVM-only: the proof binds an EVM chain ID and an EVM DID controller.
-- The user has a challenge context file (`context.json`) from peaq's onboarding service. The challenge and evidence API routes accept only peaq's onboarding service token: never call them, and never tell the user to call them. Without a context file, tell the user to ask the peaq contact running their onboarding.
+- The user has a challenge context file (`context.json`) from peaq's onboarding service. The challenge and evidence API routes accept only peaq's onboarding service token: never call them, and never tell the user to call them. Without a context file, tell the user to ask the peaq contact running their onboarding. If the file the user received is the raw challenge response (nine fields, including `profile`, `protocol` and `verifier`), the CLI rejects it; have the user keep the six fields first: `jq '{chainId, didController, expiresAt, machineDid, machineId, nonce}' challenge.json > context.json`.
 - The machine's current DID controller, named by `didController` in `context.json`, can sign an EIP-191 personal message. After activation that is the configured signer in Architecture A and the operator in Architecture B, unless the controller was changed since.
 
-The challenge is valid for at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock, so have the chip tooling and the controller wallet ready before step 1, and make sure the clock of the host running the CLI is correct. Each `--out` path must not exist yet; the CLI creates it with mode `0600` and never overwrites.
+The challenge is valid for at most five minutes: every stage checks `now < expiresAt <= now + 300` (Unix seconds) against the local clock, so have the chip tooling and the controller wallet ready before step 1, and make sure the clock of the host running the CLI is synced (NTP). A clock behind the server's can reject a fresh challenge, because `expiresAt` then lands more than 300 seconds ahead of the local clock. Each `--out` path must not exist yet; the CLI creates it with mode `0600` and never overwrites.
 
 1. Build the chip prehash:
    ```
    peaqos verify chip prepare \
      --context context.json --certificate leaf.der --out prehash.bin
    ```
-   `leaf.der` is the raw DER certificate read from the chip's `0xE0E0` object. The user then signs `prehash.bin` **on the chip**, with key `0xE0F0` and ECDSA without hashing (the file is already the 32-byte digest; do not hash it again), and saves the chip's native DER signature as `chip-signature.bin`. This happens with the user's own chip tooling on the device.
+   `leaf.der` is the raw DER certificate read from the chip's `0xE0E0` object. The user then signs `prehash.bin` **on the chip**, with key `0xE0F0` and ECDSA without hashing (the file is already the 32-byte digest; do not hash it again), and saves the chip's native signature (`r` and `s` as two DER integers, no `SEQUENCE` header) as `chip-signature.bin`. This happens with the user's own chip tooling on the device. With Infineon's `linux-optiga-trust-m` tools on the device, that is:
+   ```
+   trustm_cert -r 0xe0e0 -o leaf.pem
+   openssl x509 -in leaf.pem -outform DER -out leaf.der
+   # after prepare:
+   trustm_ecc_sign -k 0xe0f0 -i prehash.bin -o chip-signature.der
+   tail -c +3 chip-signature.der > chip-signature.bin
+   ```
+   Leave out `-H` (it hashes the input again). `trustm_ecc_sign -o` writes a 2-byte `SEQUENCE` header, which `tail -c +3` removes.
 2. Build the controller message:
    ```
    peaqos verify chip controller-request \
@@ -863,9 +871,9 @@ The challenge is valid for at most five minutes: every stage checks `now < expir
      --controller-signature controller-signature.bin --out evidence.json
    ```
    Success prints `Authority: local preflight only` and five identifiers, including `Revocation Status: not_evaluated`. Explain that `not_evaluated` means revocation was not checked locally; it is not a claim that the certificate is unrevoked.
-4. Tell the user to hand `evidence.json` to the peaq contact who issued `context.json`, then delete `prehash.bin`, `controller-message.bin`, both signature files and `evidence.json` once that contact confirms receipt. A successful `finalize` is not a verified machine: peaq's backend revalidates the evidence and consumes the challenge before `chip` can read `verified`. Offer V1 to read the state later, and never report the chip as verified from the preflight alone.
+4. Tell the user to hand `evidence.json` unchanged to the peaq contact who issued `context.json`, then delete `prehash.bin`, `controller-message.bin`, both signature files and `evidence.json` once that contact confirms receipt. A successful `finalize` is not a verified machine. peaq's onboarding service submits the file, the Verify API revalidates it and consumes the challenge, and `chip` reads `verified` only once peaq records the chip attestation in the `AttestationRegistry`. An accepted submission is not a verified chip either. Offer V1 to read the state later, and never report the chip as verified from the preflight or the submission alone.
 
-Each stage rebuilds the earlier ones from the same files, so a later stage can be rerun on its own with the same inputs and a new `--out` path. On failure, read `knowledge/troubleshooting.md` (Verify section): an expired challenge needs a new context from the onboarding service and a fresh run from step 1.
+Each stage rebuilds the earlier ones from the same files, so a later stage can be rerun on its own with the same inputs and a new `--out` path. On failure, read `knowledge/troubleshooting.md` (Verify section): an expired challenge needs a new context from the onboarding service and a fresh run from step 1 in a new directory (the CLI never overwrites an `--out` file). The full flow, including the onboarding service's side, is at https://docs.peaq.xyz/peaqos/functions/verify#verify-a-chip-end-to-end.
 
 ---
 

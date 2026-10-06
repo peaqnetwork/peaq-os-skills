@@ -913,9 +913,9 @@ Three stateless stages: each re-reads its files and rebuilds the earlier stages,
 
 | Flag | Content | Limit |
 | :-- | :-- | :-- |
-| `--context` | Challenge context JSON from peaq's onboarding service | UTF-8 without BOM, one object with exactly `chainId`, `didController`, `expiresAt`, `machineDid`, `machineId`, `nonce`, all strings; at most 4096 bytes |
+| `--context` | Challenge context JSON from peaq's onboarding service | UTF-8 without BOM, one object with exactly `chainId`, `didController`, `expiresAt`, `machineDid`, `machineId`, `nonce`, all strings; at most 4096 bytes. The raw challenge response also has `profile`, `protocol` and `verifier` and is rejected; strip them with `jq '{chainId, didController, expiresAt, machineDid, machineId, nonce}'` |
 | `--certificate` | Raw DER leaf certificate read from chip object `0xE0E0` | At most 1300 bytes |
-| `--chip-signature` | Chip's native DER signature pair returned by `0xE0F0` | At most 80 bytes |
+| `--chip-signature` | Chip's native signature from `0xE0F0`: `r` and `s` as two DER integers, no `SEQUENCE` header (`trustm_ecc_sign -o` output minus its first 2 bytes) | At most 80 bytes |
 | `--controller-signature` | Controller's EIP-191 signature, raw bytes | Exactly 65 bytes, low-s, last byte 27 or 28 (`0x1b`/`0x1c`); 0/1 is rejected, not normalized, and fails `finalize` with exit 1 |
 | `--out` | Artifact to create | Must not exist; created with mode `0600`, never overwritten, no `--force` |
 
@@ -923,7 +923,7 @@ Inputs must be regular files; symlinks, directories and FIFOs are refused. The c
 
 Human output: `Chip preflight artifact created.`, then `Stage`, `Artifact` (`chip-prehash`, `controller-message` or `evidence`), `Byte Length` and `Authority: local preflight only`. `finalize` adds `Protocol: peaq.verify.chip-proof/1`, `Profile: infineon-optiga-trust-m-express-ca306/1`, `Evidence Schema: peaq.verify.chip-evidence/1`, `Trust Bundle: infineon-optiga-trust-m-express-ca306-roots/1` and `Revocation Status: not_evaluated` (revocation was not checked locally; not a claim that the certificate is unrevoked). `--json` prints one object with `artifact`, `authority` (`local_preflight_only`), `byteLength` and `stage`, plus `evidenceSchema`, `profile`, `protocol`, `revocationStatus` and `trustBundle` on `finalize`. No artifact bytes, path, DID, address, evidence hash or chip ref is printed.
 
-A successful `finalize` is local preflight, not a submission and not a verified machine. peaq's backend revalidates the evidence and consumes the challenge; read the result with `peaqos verify status`. The chip challenge and evidence API routes take peaq's onboarding service token and are not for operators to call.
+A successful `finalize` is local preflight, not a submission and not a verified machine. peaq's onboarding service submits the evidence, the Verify API revalidates it and consumes the challenge, and `chip` reads `verified` once peaq records the chip attestation; read the result with `peaqos verify status`. The chip challenge and evidence API routes take peaq's onboarding service token and are not for operators to call.
 
 | Exit | When |
 | :-- | :-- |
