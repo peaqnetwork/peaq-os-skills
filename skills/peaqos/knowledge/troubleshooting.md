@@ -190,7 +190,7 @@ Verify is experimental. Read the exact message and exit code; the CLI prints fix
 
 | Reason in the message | Action |
 |-----------------------|--------|
-| `the challenge is outside its freshness window. Request a new challenge and retry.` | The challenge expired or the local clock differs from the server's; a clock behind the server's fails even on a fresh challenge. Sync the clock (NTP), get a new `context.json` from peaq's onboarding service, and start again from `prepare` in a new directory (new prehash, new signatures). |
+| `the challenge is outside its freshness window. Request a new challenge and retry.` | The challenge expired, or the local clock is behind the server's so that `expiresAt` is more than 300 seconds ahead of it. Sync the clock (NTP), get a new `context.json` from peaq's onboarding service, and start again from `prepare` in a new directory (new prehash, new signatures). |
 | `the supplied certificate is not a valid chip leaf` / `does not chain to a trusted chip root` / `is not a supported chip profile` | Only an Infineon OPTIGA Trust M Express leaf under the CA306 chain works. Re-read the raw DER from object `0xE0E0`; another chip cannot be used. |
 | `the supplied chip signature is not well formed` | Pass the chip's native signature from `0xE0F0` as raw bytes: `r` and `s` as two DER integers with no `SEQUENCE` header, at most 80 bytes. `trustm_ecc_sign -o` adds a 2-byte header; strip it with `tail -c +3 chip-signature.der > chip-signature.bin`. |
 | `the supplied chip signature does not match this attempt` | The chip signed something other than this `prehash.bin`, or the prehash was hashed again. Sign the exact file with ECDSA without hashing. |
