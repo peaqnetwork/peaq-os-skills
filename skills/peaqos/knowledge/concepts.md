@@ -72,7 +72,7 @@ than "here's the blockchain proof" (onchain) or "my tamper-proof chip signed thi
 
 Each topic reads `unverified` (no record yet; the normal state of an existing machine), `verified`, `expired` or `revoked`. Revocation wins over expiry. There is no aggregate verified flag.
 
-v1 supports one chip: Infineon OPTIGA Trust M Express with a leaf certificate under the Infineon CA306 chain (profile `infineon-optiga-trust-m-express-ca306/1`). The CLI and SDK only read records and build local chip preflight evidence; peaq's onboarding service submits that evidence through Bearer-protected routes, and peaq is the only attester. Scope on peaq mainnet is EVM-only: peaq-homed machines get a result, Solana-homed machines get `503 VERIFY_READ_UNAVAILABLE`, and chip intake binds an EVM chain ID and DID controller.
+v1 supports one chip: Infineon OPTIGA Trust M Express with a leaf certificate under the Infineon CA306 chain (profile `infineon-optiga-trust-m-express-ca306/1`). The CLI and SDK only read records and build local chip preflight evidence; peaq's onboarding service submits that evidence through Bearer-protected routes, peaq is the only attester, and `chip` reads `verified` once peaq records the chip attestation (an accepted submission alone is not a verified chip). Scope on peaq mainnet is EVM-only: peaq-homed machines get a result, Solana-homed machines get `503 VERIFY_READ_UNAVAILABLE`, and chip intake binds an EVM chain ID and DID controller.
 
 Verify attests the machine, not individual events. It does not change the MCR score and does not set an event's trust level; `--trust hardware` stays a value you choose per event.
 
