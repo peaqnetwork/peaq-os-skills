@@ -17,8 +17,9 @@ Auto-detects your installed agent (Claude Code, Cursor, Windsurf) and installs t
 ## Available skills
 
 | Skill | What it does |
-|-------|-------------|
+|-------|--------------|
 | `peaqos` | Economics 2.0 activation, lifecycle, MCR, monetization, and staged Solana mainnet onboarding |
+| `rtp` | Paid machine work — register a robot on the Robot Task Protocol, accept and serve paid tasks, hire robots over x402, batch-pay a fleet |
 
 More skills coming as peaqOS expands.
 
