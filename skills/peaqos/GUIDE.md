@@ -284,7 +284,7 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
-A Solana-homed machine keeps its identity record, DID document and Machine NFT in Solana accounts owned by a Solana key. The bond is paid on Solana, in PEAQ or USDC, and booked on peaq, so the machine still has one subscription and one credit rating on peaq. Onboarding runs terminal-first in seven stages, with sync messages carried by peaq's Trust Validator node:
+A Solana-homed machine keeps its identity record, DID document and Machine NFT in Solana accounts that name a Solana key as owner. The bond is paid on Solana, in PEAQ or USDC, and booked on peaq, so the machine still has one subscription and one credit rating on peaq. Onboarding runs terminal-first in seven stages, with sync messages carried by peaq's Trust Validator node:
 
 | Stage | Signer | `--phase` |
 | --- | --- | --- |
