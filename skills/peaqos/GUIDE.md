@@ -352,7 +352,7 @@ The request freezes the tier, the rail and the escrow, and the SDK fingerprints 
 ### Preview, then run
 
 ```bash
-peaqos activate "${ARGS[@]}" --dry-run              # keyless; ends with "Run it with --max-in N"
+peaqos activate "${ARGS[@]}" --operator-wallet svm-operator --dry-run   # keyless; ends with "Run it with --max-in N"
 MAX_IN=<N from the preview>                         # escrow in base units of the pay-in token
 ARGS+=(--max-in "$MAX_IN")
 peaqos activate "${ARGS[@]}" \
@@ -360,7 +360,7 @@ peaqos activate "${ARGS[@]}" \
   --wait-minutes 60 --yes
 ```
 
-The preview shows where the onboarding stands, the registration, the bond and the escrow against the owner's balance, the rents, the settlement path (on USDC, check it names the lookup table as verified) and all seven stages. `--yes` accepts every stage's terms as printed, so give it only after the user agreed to the whole plan; to decide at settlement, run stage by stage instead (`--phase registration` with the operator wallet, then `request`, `finalise`, `native_onboarding`, `linkage` with the owner wallet). No link fee cap: production's link push goes to the Trust Validator node with no fee. `--max-link-push-fee-lamports` is needed only if `--phase linkage --dry-run` names a LayerZero route.
+`--operator-wallet` in the preview reads only the wallet's public address (no unlock); an owner wallet that is not registered yet cannot be quoted without it. The preview shows where the onboarding stands, the registration, the bond and the escrow against the owner's balance, the rents, the settlement path (on USDC, check it names the lookup table as verified) and all seven stages. `--yes` accepts every stage's terms as printed, so give it only after the user agreed to the whole plan; to decide at settlement, run stage by stage instead (`--phase registration` with the operator wallet, then `request`, `finalise`, `native_onboarding`, `linkage` with the owner wallet). No link fee cap: production's link push goes to the Trust Validator node with no fee. `--max-link-push-fee-lamports` is needed only if `--phase linkage --dry-run` names a LayerZero route.
 
 With a healthy node a first run took about 10 minutes. Done means exit `0` and `next_step.phase` equal to `complete` (the summary prints `link seq N applied`). Exit `0` on a single stage is not completion.
 
@@ -370,7 +370,7 @@ Until `[4/7]` the owner can step out: `--phase cancel_request --owner-wallet svm
 
 ### If it stops early
 
-Rerun the same command in the same directory. It reads `peaqos.log`, works out where the onboarding stands and starts there; nothing recorded is sent again. That covers `PENDING` (exit `2`, naming `credit`, `bond` or `link_application`: each wait is also capped by the SDK, 3 minutes for the credit and 6 for the bond), Ctrl-C (`CANCELLED`, exit `1`), a timeout and a lost connection. Every stop prints `resume_command`. Never delete the journal, change the inputs or send a replacement transaction yourself.
+Rerun the same command in the same directory. It reads `peaqos.log`, works out where the onboarding stands and starts there; nothing recorded is sent again. That covers `PENDING` (exit `2`, naming `credit`, `bond` or `link_application`: each wait is also capped by the SDK, 3 minutes for the credit and 6 for the bond), Ctrl-C (`CANCELLED`, exit `1`, or `PENDING`, exit `2`, when a journaled write's outcome still needs reconciling), a timeout and a lost connection. Every stop prints `resume_command`. Never delete the journal, change the inputs or send a replacement transaction yourself.
 
 ### See what ran and read the state
 
@@ -380,7 +380,7 @@ peaqos -v machine history <decimal-id> --chain solana    # plus full references 
 peaqos machine status <decimal-id> --json --chain solana # native state, with the top-level link block
 ```
 
-`machine history` is keyless and works from any directory: no journal, inputs or wallet. A source it could not read is named and it exits `2`; the rows shown are still exact. `machine status --json --chain solana` reports the `link` block (`not_pushed`, `pending_application`, `linked` or `unavailable`). Without `--chain solana`, a missing or foreign-home peaq record falls back to the Solana read: `status: "observed"` with a `native_current_state` that separates finalized peaq and confirmed Solana observations, not an atomic snapshot. `present` proves the accounts exist, not that the link is complete.
+`machine history` needs no journal, original inputs or wallet, but it reads the chain configuration from `.env`: run it in the onboarding directory, or in one whose `.env` has the same public configuration. A source it could not read is named and it exits `2`; the rows shown are still exact. `machine status --json --chain solana` reports the `link` block (`not_pushed`, `pending_application`, `linked` or `unavailable`). Without `--chain solana`, a missing or foreign-home peaq record falls back to the Solana read: `status: "observed"` with a `native_current_state` that separates finalized peaq and confirmed Solana observations, not an atomic snapshot. `present` proves the accounts exist, not that the link is complete.
 
 ---
 

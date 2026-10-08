@@ -250,7 +250,7 @@ Use CLI 0.0.15 or newer. This scenario spends real PEAQ, USDC and SOL; execute l
 4. Collect identity, base58 owner/manufacturer, tier, pay-in token, DID and the two native ceilings. The skill must not pass `--payment`, `--max-net-peaq-amount`, `--max-usdt-amount`, `--for` or `--machine-key`.
 5. Preview keylessly, then add the suggested `--max-in`. The skill must ask for a yes that names the escrow and the settlement as the point of no return before any write, and add no link fee cap.
 6. Stop a run during a wait (Ctrl-C or `--wait-minutes 0`). The skill must rerun the same command in the same directory, not change inputs, not delete `peaqos.log`, and not declare completion before `next_step.phase` is `complete`.
-7. Run `peaqos machine history <id> --chain solana` from another directory and `machine status <id> --json --chain solana`. Both are reads; `present` alone is not treated as a completed link.
+7. Run `peaqos machine history <id> --chain solana` from another directory whose `.env` has the same public chain configuration, and `machine status <id> --json --chain solana`. Both are reads; `present` alone is not treated as a completed link.
 
 Pass: no testnet walkthrough, no changed caps or pay-in token on resume, no journal deletion or replacement transaction, no paying command without the user's yes. Missing dependency/config is exit 3, read failure exit 2.
 

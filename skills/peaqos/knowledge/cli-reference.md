@@ -196,7 +196,7 @@ Terminal-first, seven stages: `[1/7]` operator registration on peaq (`registrati
 
 `--for` and `--machine-key` are rejected. `--payment`, `--max-net-peaq-amount` and `--max-usdt-amount` belong to the removed flow and are refused with `OPTION_NOT_FOR_CHAIN` (exit `1`) naming the replacement; `--from-block` is accepted and ignored. Keep every input unchanged across invocations, and keep the working directory and `peaqos.log`: a rerun reconciles from the journal and never resends. Done is exit `0` with `next_step.phase == "complete"`; exit `0` on one stage is not completion. Every stop prints `resume_command`, and each run writes `onboarding-<machine-id>.json` beside the journal.
 
-`peaqos machine history <decimal-id> --chain solana` lists every transaction of the onboarding on both chains (who sent it, slot or block, cost), then totals per payer. Keyless, from any directory; `-v` adds explorer links, `--json` decimal strings; an unread source is named and exits `2`.
+`peaqos machine history <decimal-id> --chain solana` lists every transaction of the onboarding on both chains (who sent it, slot or block, cost), then totals per payer. No journal, inputs or wallet, but it needs the chain configuration in the current directory's `.env`; `-v` adds explorer links, `--json` decimal strings; an unread source is named and exits `2`.
 
 With SVM configuration, `whoami` displays the requested cluster and available metadata without verifying it. Root `--svm-network` and `--svm-rpc-url` override environment, then dotenv settings.
 
