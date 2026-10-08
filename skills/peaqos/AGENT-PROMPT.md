@@ -42,7 +42,7 @@ pip show open-wallet-standard >/dev/null 2>&1 || echo "OWS_NOT_INSTALLED"   # th
 
 - Python < 3.10 or missing → tell user to install Python 3.10+
 - CLI not installed → offer to run install commands (see `GUIDE.md#install`)
-- CLI older than 0.0.10 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else: 0.0.9 and older fail every `peaq-mainnet` activation and renewal since the 2026-09-15 upgrade (`RPC_FAILED` naming `fullMode()`). For the Solana path require 0.0.12 (see `knowledge/cli-reference.md`, Solana activation).
+- CLI older than 0.0.10 → tell the user to run `pip install -U peaq-os-cli` and stop before anything else: 0.0.9 and older fail every `peaq-mainnet` activation and renewal since the 2026-09-15 upgrade (`RPC_FAILED` naming `fullMode()`). Solana onboarding needs 0.0.15 or newer (gate in Phase 11).
 - CLI 0.0.10 or newer → proceed. Scale and Stream are included. If any expected command group is missing, stop and ask the user to upgrade with `pip install -U peaq-os-cli`. Use this one fallback for all groups except Verify, which has its own gate in Phase 12.
 - OWS installed → store as `OWS_AVAILABLE=true`; the W2.5 wallet path will be offered in Phase 5
 - OWS not installed → store as `OWS_AVAILABLE=false`; surface once, non-blocking:
@@ -76,7 +76,7 @@ Ask the user: "Where would you like to start?" Wait for their response. Options:
 - D: Troubleshoot a problem
 - E: Connect a machine to the Machine Market (Scale)
 - F: Sell or buy machine data (Stream)
-- G: Home a machine on Solana (mainnet, paused)
+- G: Home a machine on Solana (mainnet)
 - H: Check a machine's Verify status or prepare chip evidence (Verify, experimental)
 
 Routing:
@@ -86,7 +86,7 @@ Routing:
 - D → Read `knowledge/troubleshooting.md`, ask for symptom, diagnose
 - E → Phase 9 (Scale)
 - F → Phase 10 (Stream)
-- G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding, which starts with the pause notice). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11, and is not paused.
+- G, or a request to onboard, activate or home a machine on Solana / SVM → Phase 11 (Solana onboarding). Paying a data seller on Solana is Phase 10 T4 (`stream pay --chain solana`), not Phase 11.
 - H, or a request that names peaqOS Verify, KYB or the chip attestation, or asks whether a machine is verified, KYB'd or chip-verified ("is machine X verified?") → Phase 12 (Verify). "Verify my machine is registered / active / paid" is chain state, not Verify: run `peaqos machine status <decimal-id>` (Phase 8 option E) and report Available, Subscription status and Tier. Do not use Phase 7, which submits an event.
 
 ---
@@ -744,28 +744,20 @@ Failure triage: `access not granted for this buyer private key` → wrong buyer 
 
 ## Phase 11: Solana onboarding
 
-Route here only for onboarding, activating or homing a machine on Solana (SVM). Solana payments (`stream pay --chain solana`, Market orders paid in SPL tokens) belong to Phase 10 and Phase 9, work on CLI 0.0.9 and are not paused. Read `GUIDE.md#solana` and the Solana activation section of `knowledge/cli-reference.md` before acting.
+Route here only for onboarding, activating or homing a machine on Solana (SVM). Solana payments (`stream pay --chain solana`, Market orders paid in SPL tokens) belong to Phase 10 and Phase 9. Read `GUIDE.md#solana` and the Solana activation section of `knowledge/cli-reference.md` before acting. Mainnet only: there is no testnet, and the keyless preview is the only rehearsal.
 
-**Stop first: Solana onboarding is paused.** The CORE-801 contract upgrade went live on peaq mainnet on 2026-09-30 and removed the reservation step, so Solana onboarding fails with every published release up to `peaq-os-cli` 0.0.14 and `peaq-os-sdk` 0.10.0, which all still start with the reservation step the upgrade removed. Before any step below, tell the user:
+For a non-technical operator, frame it first:
+> "Your machine will live on Solana, while its subscription and credit rating stay on peaq. You need two wallets: a peaq operator wallet that signs one registration on peaq (about 0.01 PEAQ, once), and a Solana owner wallet that pays the bond in PEAQ or USDC on Solana plus a little SOL for fees. Once the bond is settled it cannot be cancelled. A full run takes about 10 minutes."
 
-> "Solana onboarding is paused. A peaq contract upgrade changed how a Solana onboarding starts, and the current peaqOS CLI and SDK still use the old flow, so the first step fails. A release for the new flow will follow. Until then, activate new machines on peaq; machines already on Solana and Solana payments keep working."
-
-Then ask: "How would you like to continue?" Options:
-- A: Activate the machine on peaq instead → Phase 3 (architecture questionnaire), then Phases 4 to 6 (`peaqos activate` without `--chain`)
-- B: Stop here and come back when the new release is out
-
-Do not run any `peaqos activate --chain solana` phase, and do not suggest a workaround. A user with a Solana onboarding already in progress keeps the working directory, the original arguments and `peaqos.log`, and asks the peaq contact running their onboarding before running any further phase. Machines already homed on Solana are still managed through Phase 8 (`--chain solana` on status, suspend, resume and the DID setters).
-
-The steps below describe the reservation-based flow in CLI 0.0.13 and 0.0.14. Keep them for when a CLI and SDK release for the new flow ships; follow them only once peaq has announced that Solana onboarding is open again and the user has that release installed.
-
-1. Gate: run `peaqos activate --help | grep -q -- '--chain'`. If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop this path. Do not assume CLI 0.0.9 ships `--chain solana`.
-2. Verify mainnet configuration: `PEAQOS_NETWORK=peaq`, `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta`. Check separate peaq `PEAQOS_RPC_URL` and Solana `PEAQOS_SVM_RPC_URL`. `whoami` cluster output is unverified metadata. There is no testnet walkthrough.
-3. Create two OWS wallets using `peaqos wallet create`: a peaq operator paying peaq gas and bond, and a Solana owner paying SOL fees and rent. Fund both public addresses. Select each through `PEAQOS_OWS_WALLET` per phase and clear raw-key overrides as in the guide.
-4. Collect the original identity, base58 manufacturer and Solana owner, optional EVM operator assertion and Solana controller, tier `basic` or `pro`, DID contents and explicit budgets. Write the DID using `GUIDE.md#did-document`. Use the guide's shared argument array with `--chain solana`, `--max-net-peaq-amount` (or `--payment usdt --max-usdt-amount`), `--max-native-fee-lamports`, `--max-native-rent-lamports`, `--from-block`, `--compute-unit-limit` and `--compute-unit-price-micro-lamports`. Zero is strict. Reject `--for`, `--machine-key`, `--slippage-bps` and tier `entry`.
-5. Run a keyless `--dry-run`. With separate consent, invoke `--phase reservation` using the operator wallet, then `--phase subscription` using the same wallet and full original argument set. Approval confirmation is not subscription success.
-6. Wait for the reservation mirror and for the `SubscriptionTerminal` account to read Active or Grace with a non-zero sequence. Preview `--phase native_onboarding`. Once ready and authorized, invoke it using the Solana owner wallet. Each invocation writes only its selected phase.
-7. Keep the same working directory, configuration, original arguments and `peaqos.log`. Native exit 0 is not completion. Only `onboarding_state.evidence.stage.phase` equal to `complete` means done. Rerun the same phase without `--yes` to reconcile, never replace uncertain transactions or erase history.
-8. For current observations use `peaqos machine status <decimal-id> --json`. Solana fallback needs no wallet or journal and reports `status: "observed"` with `native_current_state`; `subscription_source` names the account the deployed programs read (`terminal` since CLI 0.0.10), report it as given. `present` alone does not prove completed linkage. Show pending or conflicting evidence honestly and use full-input reconciliation for the original attempt.
+1. Gate: run `peaqos activate --help | grep -q -- '--max-in'`. If absent, the CLI is older than 0.0.15 and implements the removed reservation flow, which fails against the current programs: tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` (CLI 0.0.15, SDK 0.11.0 or newer) and stop until the gate passes. For a machine started on an older release, keep its directory and `peaqos.log` and have the user post the `machine_id` in the [peaq Discord](https://discord.gg/UKTFkPWsyH) before running anything.
+2. Configure one directory per machine as in `GUIDE.md#solana`: `peaqos init` for mainnet with `TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet` and the user's own peaq RPC endpoint, then `PEAQOS_SVM_NETWORK=mainnet-beta` and `PEAQOS_SVM_RPC_URL` in `.env` (not exported). `whoami` cluster output is unverified metadata.
+3. Create two OWS wallets with `peaqos wallet create`: the operator (signs `[1/7]` on peaq only) and the owner (signs every Solana write, pays the bond and SOL). Fund the owner with at least 0.015 SOL per machine and the bond in the pay-in token plus the preview's cushion; fund the operator with about 0.05 PEAQ. Getting PEAQ or USDC onto Solana is outside the CLI. Each unlock prompts for that wallet's passphrase in the terminal, never in chat; if your shell cannot answer prompts, hand the user the exact command to run, or the user exports `OWS_PASSPHRASE` in their own environment.
+4. Collect the permanent identity (machine type and credential subject), base58 owner and manufacturer, tier (`basic` unless the user asks for `entry` or `pro`), pay-in token (`PEAQ` or `USDC`), DID contents and the two native ceilings. Write `did.json` using `GUIDE.md#solana` and build its `ARGS` array. Omit `--evm-operator`. Never pass `--for`, `--machine-key`, `--payment`, `--max-net-peaq-amount` or `--max-usdt-amount` (`OPTION_NOT_FOR_CHAIN`).
+5. Run the keyless `peaqos activate "${ARGS[@]}" --operator-wallet <operator> --dry-run` (reads the wallet's public address, no unlock; without it an unregistered owner wallet cannot be quoted). Show the user the bond, the suggested `--max-in` against the owner's balance, the rents and the seven stages, then add `--max-in` from the `Run it with --max-in N` line.
+6. Paying run, with consent: ask "This escrows <max-in> <token>, settles the bond at step 4 (which cannot be cancelled afterwards) and spends about <rents from the preview> SOL in rent and fees. Run it?" Only on a clear yes run `peaqos activate "${ARGS[@]}" --operator-wallet <operator> --owner-wallet <owner> --wait-minutes 60 --yes`. `--yes` accepts every stage's terms, so if the user wants to decide at settlement, run stage by stage (`GUIDE.md#solana`) and ask again before `--phase finalise`. Add no link fee cap: production's link push goes to peaq's Trust Validator node with no fee.
+7. Done means exit `0` and `next_step.phase` equal to `complete` (`link seq N applied`). Exit `0` on a single stage is not completion.
+8. Stopped run (`PENDING` naming `credit`, `bond` or `link_application`, Ctrl-C, timeout, lost connection): earlier stages may already have escrowed or settled, so read `phases[]` and the references before telling the user what was spent. Then rerun the exact same command in the same directory; it resumes from `peaqos.log` and never resends a recorded transaction. Before `[4/7]` the user may end an open request with `--phase cancel_request` (owner wallet, separate yes); the escrow and rents come back. Never delete the journal, change the inputs, upgrade mid-onboarding or send a replacement transaction. Map error codes with `knowledge/troubleshooting.md`.
+9. Show what ran with `peaqos machine history <decimal-id> --chain solana` (no journal or wallet; run it where `.env` holds the chain configuration; every transaction on both chains with totals per payer). Current state: `peaqos machine status <decimal-id> --json --chain solana`; `present` alone does not prove the link is complete. Later management is Phase 8.
 
 ---
 

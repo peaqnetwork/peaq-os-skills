@@ -80,6 +80,14 @@ Verify attests the machine, not individual events. It does not change the MCR sc
 
 ---
 
+## Solana home
+
+**Technical:** `peaqos activate --chain solana` creates the machine's identity record, DID document and Machine NFT as Solana accounts owned by a Solana owner key. The bond is escrowed and settled on Solana in PEAQ or USDC and booked on peaq, where the subscription and the MCR stay. peaq's Trust Validator node carries the credit, status and link messages between the chains. A peaq operator wallet registers the owner wallet on peaq once and receives the machine's points and revenue there.
+
+**Plain English:** The machine lives on Solana, its subscription and credit rating stay on peaq. One wallet on each chain: the Solana one pays the bond and owns the machine, the peaq one signs a one-time registration. Once the bond is settled it cannot be cancelled.
+
+---
+
 ## Bond Status
 
 Economics 2.0 bonds PEAQ in `MachineSubscription`. Tiers are `entry`, `basic` and `pro`. The tier price is converted at the oracle rate; voucher credit reduces the net payment. Preview before spending because quotes change. Settlement can be PEAQ or USDT. The bond is not withdrawable.

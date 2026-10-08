@@ -12,7 +12,7 @@ Invoke `/peaqos` in Claude Code and the skill will:
 
 - **Demo mode**: walk you through a full testnet onboarding in ~15 minutes, step by step, with explanations at every stage
 - **Real onboarding**: ask five questions about your machine and deployment, recommend the right architecture (self-owned or machine-owned, operator-controlled), then activate in one transaction and verify with machine status
-- **Solana onboarding** (paused: a peaq contract upgrade removed the reservation call that CLI 0.0.13 and SDK 0.9.0 use, so the `reservation` phase reverts until a CLI and SDK release for the new flow ships; the skill stops before onboarding and offers activation on peaq instead): mainnet flow with peaq reservation, subscription, then native creation once the reservation mirror and the subscription terminal status are ready. Requires `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 (`[solana,ows]` extras); 0.0.10 has no `--chain solana` and 0.0.11's `solana` extra does not install.
+- **Solana onboarding**: home a machine on Solana mainnet in seven stages from one command (register the owner on peaq once, pay the bond on Solana in PEAQ or USDC, mint the machine, link it back to peaq through peaq's Trust Validator node), resume a stopped run from `peaqos.log`, and list every transaction with `peaqos machine history`. Requires `peaq-os-cli` 0.0.15 or newer with `peaq-os-sdk` 0.11.0 (`[solana,ows]` extras); older releases implement the removed reservation flow.
 - **Fleet management**: manage lifecycle, subscriptions, ownership and DID; check MCR and submit events
 - **Scale / Machine Market**: register a machine in the Market, pair an AI agent, search for services, place and manage orders (confirm or dispute delivery), including x402 pay-per-request services
 - **Verify** (experimental): read a machine's KYB and chip status with `peaqos verify status`, and build local chip preflight evidence for peaq's onboarding service with `peaqos verify chip` (Infineon OPTIGA Trust M Express, peaq-homed machines). Needs a CLI where `peaqos verify --help` works and `PEAQOS_VERIFY_API_URL=https://mcr.peaq.xyz`
@@ -26,7 +26,7 @@ Adapts its language to your background: concise and direct for developers, plain
 ## Requirements
 
 - **Python ≥ 3.10**
-- **`peaq-os-cli` 0.0.10 or newer** installed (0.0.9 is blocked on `peaq-mainnet` since 2026-09-15; 0.0.12 or newer for the Solana path; see below)
+- **`peaq-os-cli` 0.0.10 or newer** installed (0.0.9 is blocked on `peaq-mainnet` since 2026-09-15; 0.0.15 or newer for Solana onboarding; see below)
 - A wallet private key (the skill can generate one for you if needed): not needed for the offline Stream crypto commands (`stream publish`/`grant`/`consume` in local mode)
 - For mainnet: PEAQ for gas and the oracle-priced tier bond; preview the cost first
 - For testnet: nothing, the skill walks you through the agung faucet
