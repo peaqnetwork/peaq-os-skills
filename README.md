@@ -29,7 +29,7 @@ More skills coming as peaqOS expands.
 - Node.js ≥ 18
 - Python ≥ 3.10
 - [`peaq-os-cli`](https://github.com/peaqnetwork/peaq-os-cli-py) 0.0.9 or newer installed
-- Solana onboarding requires the release with `activate --chain solana` and `pip install -U peaq-os-cli "peaq-os-sdk[solana,ows]"`. The skill checks the feature before proceeding.
+- Solana onboarding requires `peaq-os-cli` 0.0.15 or newer: `pip install -U 'peaq-os-cli[solana,ows]'`. The skill checks for the terminal-first flow (`activate --help` lists `--max-in`) before proceeding.
 - For OWS encrypted key storage: `pip install "peaq-os-sdk[ows]"`
 
 ---

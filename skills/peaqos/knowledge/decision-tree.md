@@ -104,7 +104,7 @@ Simpler operationally than running two architectures.
 → Machine identity is permanent. The owner can set a separate DID controller without transferring the private key. Transferring the NFT retains that controller.
 
 **Wants the machine homed on Solana**:
-→ Solana onboarding is paused. A peaq contract upgrade removed the reservation call that peaqOS CLI 0.0.13 and SDK 0.9.0 use to start a Solana onboarding, so the `reservation` phase reverts until a CLI and SDK release for the new flow ships. Recommend A or B on peaq from the matrix and activate with `peaqos activate` without `--chain`.
+→ Phase 11 (CLI 0.0.15 or newer, mainnet only). The matrix does not apply: a Solana owner wallet owns the machine and pays the bond on Solana, and a peaq operator wallet registers that owner wallet on peaq once. Machine-key mode (`--for`, `--machine-key`) does not exist on Solana.
 
 **Wants a Verify chip record (hardware attestation)**:
 → Only an Infineon OPTIGA Trust M Express secure element (CA306 chain) on a peaq-homed machine qualifies. The chip signs on the device and the current DID controller signs the controller message, so in B the operator signs that step. The architecture choice does not change; chip preflight runs later in Phase 12 and does not change the trust level in the matrix.

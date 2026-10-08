@@ -242,20 +242,17 @@ Run through at least two distinct machine profiles and check the recommendation 
 
 ### S9: Solana mainnet onboarding and recovery
 
-Use a matching CLI/SDK release with staged Solana APIs. This scenario can spend real PEAQ and SOL; execute live writes only with explicit phase consent and funded public wallets.
+Use CLI 0.0.15 or newer. This scenario spends real PEAQ, USDC and SOL; execute live writes only with explicit consent and funded public wallets.
 
-1. Ask to home a machine on Solana or SVM. Confirm Phase 11 routing.
-2. Test the missing `--chain` help gate. The skill must give the upgrade command and stop this path.
-3. With the feature available, verify mainnet deployment and separate peaq/Solana RPCs. Create operator and native-owner OWS wallets.
-4. Collect original DID/identity, base58 owner/manufacturer, basic/pro tier and explicit budgets, compute settings and history start. Preview without wallet unlock.
-5. Reserve with the operator, then activate the subscription in a separate invocation using the same arguments. Approval alone must not count as success.
-6. Wait for the reservation mirror and for the `SubscriptionTerminal` account to read Active or Grace (non-zero sequence), preview native onboarding, then submit with the owner wallet.
-7. Simulate a native exit 0 with pending linkage. The skill must not declare completion. Reconcile without `--yes`, keeping the journal and inputs. Only aggregate stage `complete` passes.
-8. Read `machine status <id> --json` without wallet or journal. Verify `observed` and `native_current_state` are treated as observations, not proof of original-attempt completion.
+1. Ask to home a machine on Solana or SVM. Confirm Phase 11 routing and, for a non-technical persona, the plain-English framing.
+2. Test the gate on a CLI without `--max-in` (0.0.14 or older). The skill must give the upgrade command and stop this path.
+3. With 0.0.15, verify `peaq-mainnet`, `PEAQOS_SVM_NETWORK=mainnet-beta` and separate peaq/Solana RPCs in `.env`. Create operator and owner OWS wallets; the funding guidance names SOL and the bond in the pay-in token for the owner, a little PEAQ for the operator.
+4. Collect identity, base58 owner/manufacturer, tier, pay-in token, DID and the two native ceilings. The skill must not pass `--payment`, `--max-net-peaq-amount`, `--max-usdt-amount`, `--for` or `--machine-key`.
+5. Preview keylessly, then add the suggested `--max-in`. The skill must ask for a yes that names the escrow and the settlement as the point of no return before any write, and add no link fee cap.
+6. Stop a run during a wait (Ctrl-C or `--wait-minutes 0`). The skill must rerun the same command in the same directory, not change inputs, not delete `peaqos.log`, and not declare completion before `next_step.phase` is `complete`.
+7. Run `peaqos machine history <id> --chain solana` from another directory and `machine status <id> --json --chain solana`. Both are reads; `present` alone is not treated as a completed link.
 
-Pass: no testnet walkthrough, no changed caps or payment rail on resume, no journal deletion or replacement transaction after timeout/conflict. Missing dependency/config is exit 3, read failure exit 2. Pending/conflicting status can exit 0.
-
-While Solana onboarding is paused, step 1 must instead show the pause notice, offer activation on peaq, and run no `--chain solana` phase.
+Pass: no testnet walkthrough, no changed caps or pay-in token on resume, no journal deletion or replacement transaction, no paying command without the user's yes. Missing dependency/config is exit 3, read failure exit 2.
 
 ---
 

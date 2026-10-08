@@ -284,101 +284,103 @@ Put documentation and API URLs into `serviceEndpoints`. The agent writes this fi
 
 ## Solana onboarding {#solana}
 
-> **Solana onboarding is paused.** A peaq contract upgrade (CORE-801, live on peaq mainnet since 2026-09-30) removed the reservation call that peaqOS CLI 0.0.13 and SDK 0.9.0 use to start a Solana onboarding, so the `reservation` phase reverts. A CLI and SDK release for the new flow will follow. Until then, activate new machines on peaq ([Machine activation](#activation)). Machines already homed on Solana are still managed with `--chain solana`, and Solana payments (`stream pay --chain solana`) are not affected. The steps below describe the flow in CLI 0.0.13 and SDK 0.9.0 and apply again once the new release ships.
+A Solana-homed machine keeps its identity record, DID document and Machine NFT in Solana accounts owned by a Solana key. The bond is paid on Solana, in PEAQ or USDC, and booked on peaq, so the machine still has one subscription and one credit rating on peaq. Onboarding runs terminal-first in seven stages, with sync messages carried by peaq's Trust Validator node:
 
-This path needs `peaq-os-cli` 0.0.12 or newer with `peaq-os-sdk` 0.8.0 or newer and the `[solana]` and `[ows]` extras (released 2026-09-16): `pip install -U 'peaq-os-cli[solana,ows]>=0.0.12'`. CLI 0.0.10 and older have no `--chain solana`; 0.0.11 has it, but its `solana` extra pins `peaq-os-sdk<0.8.0` and pip cannot resolve it.
+| Stage | Signer | `--phase` |
+| --- | --- | --- |
+| `[1/7]` Operator registration on peaq | operator wallet (once per owner wallet; later machines send nothing) | `registration` |
+| `[2/7]` Activation request on Solana | owner wallet: the escrow moves in, the bond is sized and frozen | `request` |
+| `[3/7]` Credit from peaq | the node; a wait, nothing signed | none |
+| `[4/7]` Settlement on Solana | owner wallet: PEAQ to the vault, or USDC swapped for exactly the bond. **The point of no return** | `finalise` |
+| `[5/7]` Bond on peaq | the node and peaq; a wait | none |
+| `[6/7]` Native onboarding on Solana | owner wallet: mints the machine and its DID | `native_onboarding` |
+| `[7/7]` Link push Solana to peaq | owner wallet, then the node delivers it on peaq (no messaging fee) | `linkage` |
+
+This path needs `peaq-os-cli` 0.0.15 or newer with `peaq-os-sdk` 0.11.0 and the `[solana]` and `[ows]` extras: `pip install -U 'peaq-os-cli[solana,ows]'`. Older releases implement the removed reservation flow and fail against the current programs. Gate on the escrow flag, which only the terminal-first CLI has:
 
 ```bash
-peaqos activate --help | grep -q -- '--chain'
+peaqos activate --help | grep -q -- '--max-in'
 ```
 
-If absent, tell the user to run `pip install -U 'peaq-os-cli[solana,ows]'` and stop this path. Installing extras on an older SDK does not add the APIs. Do not assume an unreleased version number.
+If absent, tell the user to upgrade and stop this path. Mainnet only; there is no testnet, and the keyless preview is the only rehearsal.
 
 ### Configure and prepare two wallets
 
-Mainnet only. Keep one dedicated working directory, its `.env`, original DID document and `peaqos.log` throughout every phase and rerun.
+One directory per machine, kept for every run: it holds `.env`, `did.json`, the journal `peaqos.log` and the record `onboarding-<machine-id>.json`.
 
 ```bash
-export PEAQOS_NETWORK=peaq
-export TOKENOMICS_DEPLOYMENT_ID=peaq-mainnet
-export PEAQOS_SVM_NETWORK=mainnet-beta
-export PEAQOS_RPC_URL=https://peaq.api.onfinality.io/public
-export PEAQOS_SVM_RPC_URL=https://api.mainnet-beta.solana.com
-peaqos wallet create svm-test-operator
-peaqos wallet create svm-test-owner
-peaqos wallet show svm-test-operator --json
-peaqos wallet show svm-test-owner --json
+mkdir -p solana-onboarding && cd solana-onboarding
+peaqos init                      # mainnet, deployment peaq-mainnet, your own peaq RPC endpoint
+printf '%s\n' 'PEAQOS_SVM_NETWORK=mainnet-beta' 'PEAQOS_SVM_RPC_URL=<your Solana RPC endpoint>' >> .env
+peaqos wallet create svm-operator
+peaqos wallet create svm-owner
+peaqos wallet show svm-operator --json
+peaqos wallet show svm-owner --json
 unset PEAQOS_PRIVATE_KEY
 ```
 
-The peaq operator reserves and pays peaq gas and the bond. The Solana owner creates the machine on Solana and pays SOL fees and rent. Fund both public addresses before writing. Wallet creation does not fund them. Select the wallet per phase with `PEAQOS_OWS_WALLET`. Vault unlock prompts for a passphrase; keep any `OWS_PASSPHRASE` in a private environment, never chat.
+Keep endpoint URLs in `.env`: an exported variable wins over `.env`, and the CLI warns when they differ. Use your own provider endpoint for peaq; the free public endpoints rate-limit an onboarding's reads (`RPC_RATE_LIMITED`). The public Solana endpoint works; a provider endpoint avoids the occasional rerun.
 
-The RPCs are separate. Root overrides `--svm-network` and `--svm-rpc-url` precede the command name. `whoami` displays the requested Solana cluster and available SDK metadata, but does not contact Solana or verify the cluster. It does not change the selected peaq deployment.
+- **Operator wallet (peaq):** signs `[1/7]` only, about 0.01 PEAQ of gas, once per owner wallet. It owns the machine's points and revenue on peaq and pays no bond. Fund it with 0.05 PEAQ.
+- **Owner wallet (Solana):** signs every Solana write and pays the bond from its own token account, in PEAQ on Solana (the OFT, mint `PEAQjk7SRS6rXHVFFmpRr7zrC4g5ZuEebpwTxvaLr3b`, 9 decimals) or USDC (6 decimals), plus rent and fees in SOL. Fund it with at least 0.015 SOL per machine and the bond in the pay-in token plus the cushion the preview shows. Getting PEAQ or USDC onto Solana is outside the CLI.
+
+Wallet creation does not fund them. Each wallet has its own passphrase; the run asks for each once. Keep any `OWS_PASSPHRASE` in a private environment, never chat.
 
 ### Keep one original argument set
 
-Write `native-did.json` using the [DID schema](#did-document), with base58 verification-method controllers, `methodType: "Ed25519"`, and actual multibase public keys. Collect all variables below before running. `OWNER` and `MANUFACTURER` are base58 Solana public keys. `OPERATOR` is the peaq operator's EVM address. Credential bytes are an identity anchor, not a private key.
+Write `did.json` using the [DID schema](#did-document): `controller` is the owner wallet's base58 address, `methodType` `Ed25519VerificationKey2020`, `publicKeyMultibase` its real key. Replace example service endpoints with the machine's own: they are written on chain and shown on its public MCR profile. Every invocation takes the same arguments:
 
 ```bash
-COMMON_ARGS=(
-  --chain solana --json
-  --solana-owner "${OWNER:?Set the native owner public key}"
-  --evm-operator "${OPERATOR:?Set the peaq operator public address}"
-  --manufacturer "${MANUFACTURER:?Set the native manufacturer public key}"
-  --machine-type Sensor
-  --credential-subject-hex "${CREDENTIAL_SUBJECT_HEX:?Set the original identity bytes}"
-  --tier basic --did-document ./native-did.json
-  --payment peaq --max-net-peaq-amount "${PEAQ_CAP:?Set the PEAQ ceiling}"
-  --max-native-fee-lamports "${FEE_CAP:?Set the native fee ceiling}"
-  --max-native-rent-lamports "${RENT_CAP:?Set the native rent ceiling}"
-  --from-block "${HISTORY_START:?Set the original source history start}"
-  --compute-unit-limit "${COMPUTE_LIMIT:?Set the compute budget}"
-  --compute-unit-price-micro-lamports "${PRIORITY_PRICE:?Set the priority price}"
+ARGS=(
+  --chain solana
+  --solana-owner "${OWNER:?}"                        # base58 owner wallet
+  --manufacturer "${MANUFACTURER:?}"                 # base58, recorded without verification
+  --machine-type "${MACHINE_TYPE:?}"                 # with the credential subject it fixes the machine ID for good
+  --credential-subject-hex "${CREDENTIAL_SUBJECT_HEX:?}"
+  --tier basic --did-document ./did.json
+  --pay-in PEAQ                                      # or USDC
+  --max-native-fee-lamports 50000                    # network + priority fee of each Solana write
+  --max-native-rent-lamports 6000000                 # rent of each Solana write
+  --timeout-seconds 300
 )
 ```
 
-Tier is `basic` or `pro`, never `entry`. `--for`, `--machine-key` and `--slippage-bps` are rejected. `--evm-operator` is an optional assertion checked against SDK evidence. Optional `--solana-controller` is base58; omission uses the owner-only default. Choose it before previewing.
+`--tier` is `entry`, `basic` or `pro` (program tiers 0 to 2); the quote refuses a tier the deployment does not price. Ceilings of `0` are strict, never unlimited. Optional `--solana-controller` is base58; omit `--evm-operator`, the machine inherits the registration's operator. `--for` and `--machine-key` are rejected. The removed flow's `--payment`, `--max-net-peaq-amount` and `--max-usdt-amount` are refused with `OPTION_NOT_FOR_CHAIN`; `--from-block` is accepted and ignored.
 
-The payment ceiling is integer base units. For USDT, replace the payment line with `--payment usdt --max-usdt-amount "${USDT_CAP:?Set the USDT ceiling in base units}"` before the first phase. The SDK must support foreign USDT funding. Approval can exceed the current quote; the original maximum stays fixed.
+The request freezes the tier, the rail and the escrow, and the SDK fingerprints the owner, DID document, controller, manufacturer, identity and ceilings. Keep every value for every later invocation, and finish a machine before upgrading the CLI or SDK.
 
-Fee cap covers network and priority fees, excluding rent. Rent cap covers combined machine/state rent, excluding external delivery rent. `--from-block` is the inclusive peaq block covering the original attempt. Compute limit is 1 to 1,400,000; priority price is micro-lamports per compute unit. Zero is a strict limit, never unlimited. Retain the same identity, DID, controller, operator, tier, payment, ceilings, history and compute settings on every invocation.
-
-### Preview, then submit one phase per invocation
+### Preview, then run
 
 ```bash
-# Keyless full preview, no signing or submission
-peaqos activate "${COMMON_ARGS[@]}" --dry-run
-
-# Review and authorize reservation, then subscription separately
-PEAQOS_OWS_WALLET=svm-test-operator peaqos activate "${COMMON_ARGS[@]}" --phase reservation --yes
-peaqos activate "${COMMON_ARGS[@]}" --phase subscription --dry-run
-PEAQOS_OWS_WALLET=svm-test-operator peaqos activate "${COMMON_ARGS[@]}" --phase subscription --yes
-
-# Wait for the reservation mirror AND the subscription terminal status (Active or Grace)
-peaqos activate "${COMMON_ARGS[@]}" --phase native_onboarding --dry-run
-# Only when the SDK reports readiness and the user accepts the native phase:
-PEAQOS_OWS_WALLET=svm-test-owner peaqos activate "${COMMON_ARGS[@]}" --phase native_onboarding --yes
+peaqos activate "${ARGS[@]}" --dry-run              # keyless; ends with "Run it with --max-in N"
+MAX_IN=<N from the preview>                         # escrow in base units of the pay-in token
+ARGS+=(--max-in "$MAX_IN")
+peaqos activate "${ARGS[@]}" \
+  --operator-wallet svm-operator --owner-wallet svm-owner \
+  --wait-minutes 60 --yes
 ```
 
-`--yes` accepts only the selected phase. Subscription approval and activation are separate transactions. Approval alone is not subscription success. Mirror delivery is external; a peaq receipt does not prove delivery. Preview can report pending prerequisites and `did: null` before native creation.
+The preview shows where the onboarding stands, the registration, the bond and the escrow against the owner's balance, the rents, the settlement path (on USDC, check it names the lookup table as verified) and all seven stages. `--yes` accepts every stage's terms as printed, so give it only after the user agreed to the whole plan; to decide at settlement, run stage by stage instead (`--phase registration` with the operator wallet, then `request`, `finalise`, `native_onboarding`, `linkage` with the owner wallet). No link fee cap: production's link push goes to the Trust Validator node with no fee. `--max-link-push-fee-lamports` is needed only if `--phase linkage --dry-run` names a LayerZero route.
 
-Exit 0 on the native phase does not mean onboarding is done. Complete only when `onboarding_state.evidence.stage.phase` is `complete`. After delivery advances, rerun the phase without `--yes` to reconcile, keylessly, with the same inputs and journal:
+With a healthy node a first run took about 10 minutes. Done means exit `0` and `next_step.phase` equal to `complete` (the summary prints `link seq N applied`). Exit `0` on a single stage is not completion.
+
+### The point of no return
+
+Until `[4/7]` the owner can step out: `--phase cancel_request --owner-wallet svm-owner` returns the escrow in the pay-in token and the request's rents, from a request that is still `Pending` or `Committed`. After the settlement there is no cancel. If peaq refuses the bond, the Trust Validator refunds it in PEAQ to the owner's PEAQ token account (`ACTIVATION_REFUNDED`) and a rerun opens a new request. Bonds are not withdrawable.
+
+### If it stops early
+
+Rerun the same command in the same directory. It reads `peaqos.log`, works out where the onboarding stands and starts there; nothing recorded is sent again. That covers `PENDING` (exit `2`, naming `credit`, `bond` or `link_application`: each wait is also capped by the SDK, 3 minutes for the credit and 6 for the bond), Ctrl-C (`CANCELLED`, exit `1`), a timeout and a lost connection. Every stop prints `resume_command`. Never delete the journal, change the inputs or send a replacement transaction yourself.
+
+### See what ran and read the state
 
 ```bash
-peaqos activate "${COMMON_ARGS[@]}" --phase native_onboarding
+peaqos machine history <decimal-id> --chain solana       # every transaction on both chains, then totals per payer
+peaqos -v machine history <decimal-id> --chain solana    # plus full references and explorer links
+peaqos machine status <decimal-id> --json --chain solana # native state, with the top-level link block
 ```
 
-Never delete the journal or replace an uncertain transaction. Timeout, interruption or an expired native reference requires reconciliation first. See troubleshooting for conflicts and partial approval recovery.
-
-### Read a Solana-homed machine by ID
-
-```bash
-peaqos machine status <decimal-id> --json
-```
-
-With Solana support configured, a missing or foreign-home EVM record enables the ID-only fallback. No wallet, original DID file, history start or journal is needed. Top-level `status: "observed"` and `native_current_state` separate finalized peaq observations from confirmed Solana observations. They are not an atomic cross-chain snapshot.
-
-States include `absent`, `reserved`, `pending_external`, `present`, `conflict`, `in_flight` and `unavailable`. A successful pending or conflicting observation exits 0. Missing configuration exits 3; read failures exit 2 and can retain partial evidence. `present` does not prove the original payload, a receipt or completed linkage. Use full-input activation reconciliation to verify the original attempt.
+`machine history` is keyless and works from any directory: no journal, inputs or wallet. A source it could not read is named and it exits `2`; the rows shown are still exact. `machine status --json --chain solana` reports the `link` block (`not_pushed`, `pending_application`, `linked` or `unavailable`). Without `--chain solana`, a missing or foreign-home peaq record falls back to the Solana read: `status: "observed"` with a `native_current_state` that separates finalized peaq and confirmed Solana observations, not an atomic snapshot. `present` proves the accounts exist, not that the link is complete.
 
 ---
 
@@ -432,7 +434,7 @@ peaqos qualify event \
 
 ## Queries and fleet management {#queries--fleet-management}
 
-With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0. MCR reads need it set: with it unset the CLI sends `did:peaq:0x<address>` DIDs to the host in `PEAQOS_MCR_API_URL`, and those address-DID reads are no longer served. `peaq-os-sdk` 0.7.0 to 0.9.0 (CLI 0.0.13 pins 0.9.x) name `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
+With `TOKENOMICS_DEPLOYMENT_ID` set, `qualify mcr` and `show machine` use decimal machine DIDs at `https://mcr.peaq.xyz`, the host the SDK deployment record names in CLI 0.0.14 / SDK 0.10.0 and newer. MCR reads need it set: with it unset the CLI sends `did:peaq:0x<address>` DIDs to the host in `PEAQOS_MCR_API_URL`, and those address-DID reads are no longer served. `peaq-os-sdk` 0.7.0 to 0.9.0 (CLI 0.0.13 pins 0.9.x) name `https://mcr-20.peaq.xyz`, which serves the same Tokenomics 2.0 MCR API. `show operator machines` always uses an address DID. On CLI 0.0.9 both command groups still need a signer (`PEAQOS_PRIVATE_KEY` or `PEAQOS_OWS_WALLET`) and the six legacy addresses; CLI 0.0.10 reads MCR over HTTP only and needs neither.
 
 `show machine --json` in CLI 0.0.9 emits the machine ID as a JSON number. Use the `did` field or a big-integer-aware parser to avoid rounding.
 
@@ -828,7 +830,7 @@ The challenge expires after at most five minutes: every stage checks `now < expi
 |-----------|-------|
 | `PEAQOS_NETWORK` | `mainnet` |
 | `TOKENOMICS_DEPLOYMENT_ID` | `peaq-mainnet` |
-| MCR API | `https://mcr.peaq.xyz` (used by CLI 0.0.14 / SDK 0.10.0) |
+| MCR API | `https://mcr.peaq.xyz` (used by CLI 0.0.14 / SDK 0.10.0 and newer) |
 | Chain ID | 3338 |
 | RPC URL | `https://peaq.api.onfinality.io/public` |
 | Gas Station | `https://depinstation.peaq.xyz` |
